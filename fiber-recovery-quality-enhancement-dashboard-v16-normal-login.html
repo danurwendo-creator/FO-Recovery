@@ -1,0 +1,865 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Project Recovery Monitoring Dashboard</title>
+<link rel="preconnect" href="https://cdn.jsdelivr.net">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+:root{
+  --navy:#14283d; --blue:#2f91c9; --cyan:#56b6d9; --orange:#f28b24;
+  --green:#49ad67; --yellow:#f3c83d; --red:#e95a61; --purple:#8051a1;
+  --bg:#f3f6f9; --card:#fff; --text:#243447; --muted:#73808d; --line:#dce3e9;
+}
+*{box-sizing:border-box} body{margin:0;background:var(--bg);font-family:Inter,Segoe UI,Arial,sans-serif;color:var(--text)}
+.topbar{background:linear-gradient(100deg,#12283e,#1e4968);color:#fff;padding:18px 26px;display:flex;align-items:center;justify-content:space-between;gap:16px}
+.brand h1{font-size:21px;margin:0 0 4px;font-weight:700}.brand p{margin:0;color:#c8d8e5;font-size:12px}
+.actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+button,.file-label{border:0;border-radius:7px;padding:9px 13px;font-weight:600;cursor:pointer;font-size:12px}
+.btn-light{background:#fff;color:#173149}.btn-blue{background:#36a2d2;color:#fff}.btn-dark{background:#0d2033;color:#fff}
+.file-label input{display:none}
+.container{padding:16px 20px 26px;max-width:1600px;margin:auto}
+.filters{background:#fff;border:1px solid var(--line);padding:11px 13px;border-radius:9px;display:flex;gap:10px;align-items:end;flex-wrap:wrap;margin-bottom:13px}
+.filter{display:flex;flex-direction:column;gap:4px;min-width:150px}.filter label{font-size:10px;color:var(--muted);font-weight:700;text-transform:uppercase}
+select,input{border:1px solid #ccd6de;border-radius:6px;padding:8px 9px;background:#fff;color:var(--text);font-size:12px}
+.kpis{display:grid;grid-template-columns:repeat(6,1fr);gap:9px;margin-bottom:13px}
+.kpi{color:#fff;border-radius:5px;padding:11px 13px;min-height:84px;box-shadow:0 2px 5px #102b3a15}.kpi .label{font-size:10px;font-weight:700;opacity:.92}.kpi .value{font-size:27px;font-weight:800;margin-top:5px}.kpi .sub{font-size:10px;margin-top:2px;opacity:.85}
+.k1{background:#88459b}.k2{background:#ef6d1c}.k3{background:#369bc9}.k4{background:#77b6ca}.k5{background:#f5df25;color:#17212a}.k6{background:#79bc80}
+.grid-top{display:grid;grid-template-columns:1.15fr 1fr 1.1fr 1fr;gap:10px;margin-bottom:10px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:5px;padding:10px;min-width:0}.card-title{font-size:12px;font-weight:800;margin:0 0 8px}.chartbox{height:190px}.mapbox{height:190px;border-radius:4px;overflow:hidden}.health{display:grid;gap:9px;padding:4px 2px}
+.health-row{display:grid;grid-template-columns:72px 1fr 32px;align-items:center;gap:6px;font-size:10px}.health-label{color:#596674}.bar{height:9px;background:#e9edf0;border-radius:5px;overflow:hidden;display:flex}.seg-red{background:#ef5a60}.seg-amber{background:#f0a228}.seg-green{background:#48ad62}.health-num{text-align:right;font-weight:700}
+.table-card{margin-bottom:10px;overflow:auto}.parent-row{background:#f7fbff}.child-row{background:#fff}.child-row td:first-child{padding-left:28px}.child-span-id{display:inline-flex;align-items:center;gap:7px;color:#246ea7;font-weight:800}.tree-line{display:inline-block;width:13px;height:20px;border-left:2px solid #cbd5df;border-bottom:2px solid #cbd5df;border-radius:0 0 0 5px;margin-right:2px}.parent-toggle{border:0;background:#e8f2fb;color:#246ea7;border-radius:50%;width:22px;height:22px;cursor:pointer;font-weight:900;line-height:22px;padding:0}.child-badge{display:inline-block;margin-left:6px;padding:3px 7px;border-radius:10px;background:#e8f2fb;color:#356b91;font-size:8px;font-weight:800}.parent-summary{font-size:8px;color:#73808d;margin-top:2px}.milestone-parent{background:#f7fbff}.milestone-child{background:#fff}.milestone-child td:first-child{padding-left:18px}.ms-tree{display:inline-flex;align-items:center;gap:5px}.ms-parent-toggle{border:0;background:#e8f2fb;color:#246ea7;border-radius:50%;width:20px;height:20px;cursor:pointer;font-weight:900;line-height:20px;padding:0}.ms-child-id{display:inline-flex;align-items:center;gap:5px;color:#246ea7;font-weight:800}.ms-child-line{display:inline-block;width:11px;height:17px;border-left:2px solid #cbd5df;border-bottom:2px solid #cbd5df;border-radius:0 0 0 5px}.table-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}.table-wrap{overflow:auto}table{width:100%;border-collapse:collapse;font-size:10px;min-width:1060px}th{background:#f4f6f8;text-align:left;color:#566473;font-weight:800;padding:8px 7px;border-bottom:1px solid var(--line);white-space:nowrap}td{padding:7px;border-bottom:1px solid #edf1f4;white-space:nowrap}.project{font-weight:700;color:#2d79ad}.money{text-align:right}.pill{display:inline-flex;align-items:center;gap:4px;border-radius:12px;padding:3px 7px;font-size:9px;font-weight:800}.pill:before{content:"";width:7px;height:7px;border-radius:50%;display:inline-block}.green{background:#e5f5e9;color:#258344}.green:before{background:#49ad67}.amber{background:#fff2d9;color:#9b680b}.amber:before{background:#f0a228}.red{background:#fde5e7;color:#b52f37}.red:before{background:#e95a61}.blue{background:#e5f2fb;color:#2b6f99}.blue:before{background:#399bd0}
+.progress{width:180px;height:9px;background:#e9edf0;border-radius:6px;overflow:hidden;display:inline-block;vertical-align:middle}.progress span{height:100%;display:block;background:linear-gradient(90deg,#55b66d,#399bd0)}
+.bottom{display:grid;grid-template-columns:1fr 1fr;gap:10px}.bottom .chartbox{height:250px}
+.legend{display:flex;gap:14px;font-size:9px;color:#6d7883;margin-top:4px}.legend i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:4px}
+.footer{font-size:10px;color:#7b8792;text-align:right;padding-top:9px}
+.empty-state{padding:28px 18px;text-align:center;color:#7b8792;border:1px dashed #cfd9e1;border-radius:8px;background:#fbfcfd}.empty-state b{display:block;color:#405466;font-size:12px;margin-bottom:4px}.empty-state span{font-size:10px}.submit-modal{display:none;position:fixed;inset:0;z-index:7000;background:#0007;padding:20px;overflow:auto}.submit-modal.open{display:flex;align-items:center;justify-content:center}.submit-box{width:min(1000px,100%);background:#fff;border-radius:12px;box-shadow:0 20px 60px #0005;overflow:hidden}.submit-head{background:linear-gradient(100deg,#12283e,#1e4968);color:#fff;padding:14px 16px;display:flex;justify-content:space-between;gap:10px;align-items:center}.submit-head h3{margin:0;font-size:15px}.submit-head p{margin:3px 0 0;color:#c8d8e5;font-size:10px}.submit-body{padding:14px}.submit-grid{display:grid;grid-template-columns:1fr 1fr 1fr 1fr auto;gap:8px;align-items:end}.submit-field{display:flex;flex-direction:column;gap:4px}.submit-field label{font-size:9px;color:#73808d;font-weight:800;text-transform:uppercase}.submit-list{margin-top:12px;border:1px solid #dfe5ea;border-radius:8px;overflow:auto}.submit-list table{min-width:650px}.submit-list th,.submit-list td{font-size:10px}.submit-remove{background:#fff1f1;color:#b52f37;border:1px solid #f0c8cc;padding:4px 7px;font-size:9px}.submit-footer{display:flex;justify-content:space-between;gap:8px;align-items:center;margin-top:12px;flex-wrap:wrap}.submit-import{display:flex;gap:7px;align-items:center;flex-wrap:wrap}.submit-import label{background:#eef5fa;color:#28698e;border:1px solid #d7e6ef;border-radius:6px;padding:7px 9px;font-size:10px;font-weight:800;cursor:pointer}.submit-import input{display:none}.submit-note{font-size:9px;color:#73808d;line-height:1.4}.hierarchy-box{display:grid;grid-template-columns:1fr 1fr;gap:8px}.hierarchy-box .admin-field{min-width:0}@media(max-width:800px){.submit-grid{grid-template-columns:1fr 1fr}.submit-grid button{grid-column:1/-1}.hierarchy-box{grid-template-columns:1fr}}
+.badge{font-size:9px;padding:4px 7px;border-radius:10px;background:#eef3f7;color:#5c6a76;font-weight:700}
+@media(max-width:1100px){.kpis{grid-template-columns:repeat(3,1fr)}.grid-top{grid-template-columns:1fr 1fr}.bottom{grid-template-columns:1fr}}
+@media(max-width:700px){.kpis{grid-template-columns:1fr 1fr}.grid-top{grid-template-columns:1fr}.container{padding:10px}.topbar{padding:14px}.brand h1{font-size:17px}}
+
+.milestone-card{margin-bottom:10px}
+.milestone-controls{display:flex;gap:8px;align-items:end;flex-wrap:wrap;margin-bottom:9px}
+.milestone-controls .filter{min-width:190px}
+.table-controls{margin-top:0}.table-controls .filter{min-width:170px}
+
+.milestone-wrap{overflow:auto;border:1px solid var(--line);border-radius:4px}
+.milestone-table{min-width:1200px;width:100%;border-collapse:collapse;font-size:9px}
+.milestone-table th{background:#f4f6f8;padding:7px 6px;border-bottom:1px solid var(--line);white-space:nowrap;text-align:center}
+.milestone-table th small{font-weight:600;color:#8a96a1;font-size:7px}.milestone-table td{padding:6px;border-bottom:1px solid #edf1f4;text-align:center;vertical-align:middle;white-space:nowrap}
+.milestone-table td:first-child,.milestone-table td:nth-child(2),.milestone-table td:nth-child(3){text-align:left}
+.ms{display:flex;align-items:center;justify-content:center}
+.ms-dot{width:11px;height:11px;border-radius:50%;display:inline-block;border:2px solid #fff;box-shadow:0 0 0 1px #cfd8df}
+.ms-done{background:#49ad67}.ms-active{background:#f0a228}.ms-late{background:#e95a61}.ms-plan{background:#b9c4cc}
+.ms-date{display:block;font-size:8px;color:#7a8792;margin-top:2px}
+.milestone-legend{display:flex;gap:12px;font-size:9px;color:#6d7883;margin-top:7px}
+
+.admin-panel{display:none;margin-bottom:10px}
+.admin-panel.open{display:block}
+.admin-grid{display:grid;grid-template-columns:1.1fr 1fr;gap:10px}
+.admin-form{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+.admin-form .full{grid-column:1/-1}
+.admin-field{display:flex;flex-direction:column;gap:4px}
+.admin-field label{font-size:10px;color:var(--muted);font-weight:700;text-transform:uppercase}
+.admin-field input,.admin-field select,.admin-field textarea{font:inherit;border:1px solid #ccd6de;border-radius:6px;padding:8px;background:#fff;color:var(--text)}
+.admin-field textarea{min-height:58px;resize:vertical}
+.admin-actions{display:flex;gap:7px;justify-content:flex-end;margin-top:9px;flex-wrap:wrap}
+.milestone-edit{display:grid;grid-template-columns:1fr 110px 110px 105px 1fr;gap:6px;align-items:center;padding:7px 0;border-bottom:1px solid #edf1f4}
+.milestone-edit:last-child{border-bottom:0}
+.milestone-edit .name{font-size:10px;font-weight:700}
+.milestone-edit input,.milestone-edit select{font-size:10px;padding:6px}
+.admin-note{font-size:10px;color:#73808d;line-height:1.45}
+.doc-list{display:flex;gap:5px;flex-wrap:wrap;align-items:center}.doc-chip{display:inline-flex;align-items:center;gap:4px;background:#eef5fa;color:#28698e;border:1px solid #d7e6ef;border-radius:12px;padding:3px 7px;font-size:9px;font-weight:700;text-decoration:none}.doc-chip:hover{background:#e3f0f8}.doc-upload{display:inline-flex;align-items:center;gap:4px;background:#f4f6f8;color:#536371;border:1px solid #dce3e9;border-radius:6px;padding:5px 7px;font-size:9px;font-weight:700;cursor:pointer}.doc-upload input{display:none}.docs-cell{min-width:150px;white-space:normal!important}.doc-empty{color:#9aa5ae;font-size:9px}.ms-update{background:#2f91c9;color:#fff;padding:4px 7px;font-size:9px;border-radius:5px}.ms-item-update{display:block;margin:4px auto 0;background:#2f91c9;color:#fff;border:0;border-radius:4px;padding:3px 6px;font-size:8px;font-weight:700;cursor:pointer}.ms-item-update:hover{background:#247da9}.milestone-table{min-width:1300px}
+@media(max-width:900px){.admin-grid{grid-template-columns:1fr}.admin-form{grid-template-columns:1fr}.admin-form .full{grid-column:auto}.milestone-edit{grid-template-columns:1fr 1fr}.milestone-edit .name{grid-column:1/-1}}
+
+.child-admin-wrap{overflow:auto;border:1px solid #dfe5ea;border-radius:8px}.child-admin-table{width:100%;border-collapse:collapse;font-size:10px;min-width:920px}.child-admin-table th{background:#f4f7f9;color:#52606d;padding:7px;border-bottom:1px solid #dfe5ea;text-align:left;white-space:nowrap}.child-admin-table td{padding:7px;border-bottom:1px solid #edf0f2;white-space:nowrap}.child-admin-table tr:last-child td{border-bottom:0}.child-admin-edit{background:#fff;border:1px solid #2f91c9;color:#246f98;border-radius:5px;padding:4px 8px;font-size:9px;font-weight:800;cursor:pointer}.child-admin-edit:hover{background:#eef7fc}.admin-parent-note{padding:8px 10px;border:1px solid #cfe4f2;background:#eef7fc;border-radius:7px;color:#2b6f99;font-size:10px;line-height:1.4}.admin-readonly{background:#f4f7f9!important;color:#647381}.child-admin-empty{text-align:center;color:#8a96a1;padding:18px!important}.milestone-focus{display:none;position:fixed;inset:0;z-index:6000;background:#0007;padding:20px;overflow:auto}.milestone-focus.open{display:flex;align-items:center;justify-content:center}.milestone-focus-box{width:min(760px,100%);background:#fff;border-radius:10px;padding:14px;box-shadow:0 20px 60px #0005}.milestone-focus-grid{display:grid;grid-template-columns:1.5fr 1fr 1fr 1fr 1fr;gap:8px;margin-top:10px}.milestone-focus-grid>div{display:flex;flex-direction:column;gap:4px}.milestone-focus-grid label{font-size:9px;color:#73808d;font-weight:800;text-transform:uppercase}.milestone-focus-grid input,.milestone-focus-grid select{font-size:11px}.focus-timing div{min-height:32px;padding:8px;border:1px solid #dce3e9;border-radius:6px;background:#f6f8fa;font-size:10px;font-weight:700}.ms-date{line-height:1.35}@media(max-width:800px){.milestone-focus-grid{grid-template-columns:1fr 1fr}.focus-timing{grid-column:1/-1}}
+
+.login-screen{position:fixed;inset:0;background:linear-gradient(135deg,#12283e,#1e4968);display:flex;align-items:center;justify-content:center;z-index:9999;padding:20px}.login-box{width:min(410px,100%);background:#fff;border-radius:14px;padding:28px;box-shadow:0 20px 60px #0005}.login-logo{font-size:14px;font-weight:900;color:#2f91c9;letter-spacing:.8px}.login-box h2{margin:8px 0 5px;color:#14283d;font-size:23px}.login-box p{margin:0 0 18px;color:#73808d;font-size:11px;line-height:1.5}.login-field{display:flex;flex-direction:column;gap:5px;margin-bottom:11px}.login-field label{font-size:10px;color:#566473;font-weight:800;text-transform:uppercase}.login-field input{width:100%;padding:10px}.login-error{min-height:18px;color:#c33b44;font-size:10px;margin:4px 0}.login-submit{width:100%;background:#2f91c9;color:#fff;padding:11px}.demo-note{margin-top:12px;padding:9px;background:#f3f6f9;border-radius:7px;color:#73808d;font-size:9px;line-height:1.5}.session{display:flex;align-items:center;gap:7px;flex-wrap:wrap}.role-badge{background:#dceefa;color:#dceefa;border-radius:12px;padding:4px 8px;font-size:9px;font-weight:800}.role-badge.viewer{background:#e9edf0;color:#566473}.role-badge.updater{background:#e5f5e9;color:#258344}.update-btn{background:#2f91c9;color:#fff;padding:5px 8px;font-size:10px}.admin-panel{position:fixed;inset:0;z-index:5000;background:#0007;padding:20px;overflow:auto;margin:0!important}.admin-panel.open{display:block}.admin-panel>.table-head,.admin-panel>.admin-grid{max-width:1250px;margin-left:auto;margin-right:auto}.admin-panel>.table-head{background:#fff;border-radius:8px 8px 0 0;padding:12px 14px;margin-top:10px}.admin-panel>.admin-grid{background:#fff;padding:0 14px 14px;border-radius:0 0 8px 8px}.admin-panel .table-head .badge{display:flex;align-items:center;gap:6px}.admin-close{background:#eef3f7;color:#173149;padding:6px 10px;margin-left:8px}
+@media(max-width:700px){.login-box{padding:22px}.session{justify-content:flex-end}}
+
+.milestone-editor-table-wrap{overflow:auto;border:1px solid #dfe5ea;border-radius:8px}
+.milestone-editor-table{width:100%;border-collapse:collapse;font-size:11px}
+.milestone-editor-table th{background:#f4f7f9;color:#52606d;text-align:left;padding:7px;border-bottom:1px solid #dfe5ea;white-space:nowrap}
+.milestone-editor-table td{padding:6px;border-bottom:1px solid #edf0f2;vertical-align:middle}
+.milestone-editor-table input,.milestone-editor-table select{width:100%;box-sizing:border-box;padding:6px;border:1px solid #ccd5dc;border-radius:5px;background:#fff;font-size:11px}
+.milestone-editor-table tr:last-child td{border-bottom:0}
+.ms-timing{display:block;margin-top:2px;color:#6b7785;font-size:9px}
+
+.login-diagnostic{margin-top:12px;border:1px solid #e6e9ef;border-radius:10px;padding:10px;background:#fafbfc;font-size:12px;text-align:left;display:none}.diag-title{font-weight:700;margin-bottom:7px;color:#344054}.diag-row{display:flex;justify-content:space-between;gap:12px;padding:3px 0;border-bottom:1px dashed #eee}.diag-row:last-child{border-bottom:0}.diag-ok{color:#258344;font-weight:700}.diag-warn{color:#9b680b;font-weight:700}.diag-bad{color:#c53b32;font-weight:700}.diag-neutral{color:#667085}
+</style>
+</head>
+<body>
+<div class="login-screen" id="loginScreen">
+  <div class="login-box">
+    <div class="login-logo">FIBER RECOVERY CONTROL TOWER</div>
+    <h2>Login Dashboard</h2>
+    <p>Silakan login sesuai hak akses. Viewer hanya dapat melihat monitoring; Updater dapat melakukan update progress span dan milestone.</p>
+    <form onsubmit="login(event)">
+      <div class="login-field"><label>Email</label><input id="loginUser" type="email" autocomplete="email" placeholder="nama@perusahaan.com" required></div>
+      <div class="login-field"><label>Password</label><input id="loginPass" type="password" autocomplete="current-password" required></div>
+      <div class="login-error" id="loginError">
+<div id="loginDiagnostic" class="login-diagnostic">
+  <div class="diag-title">Login Diagnostic</div>
+  <div class="diag-row"><span>Supabase Connection</span><span id="diagConnection" class="diag-neutral">Checking…</span></div>
+  <div class="diag-row"><span>Authentication</span><span id="diagAuth" class="diag-neutral">Waiting</span></div>
+  <div class="diag-row"><span>Email Confirmation</span><span id="diagConfirm" class="diag-neutral">Waiting</span></div>
+  <div class="diag-row"><span>Profile</span><span id="diagProfile" class="diag-neutral">Waiting</span></div>
+  <div class="diag-row"><span>Role</span><span id="diagRole" class="diag-neutral">Waiting</span></div>
+  <div class="diag-row"><span>Details</span><span id="diagDetails" class="diag-neutral">—</span></div>
+</div></div>
+      <button class="login-submit" type="submit">Masuk ke Dashboard</button>
+    </form>
+    <div class="demo-note"><b>Supabase Auth</b><br>Login menggunakan email/password dari Supabase Auth. Hak akses Viewer / Updater diatur pada tabel <b>profiles</b>.</div>
+  </div>
+</div>
+<header class="topbar">
+  <div class="brand">
+    <h1>FIBER RECOVERY — QUALITY ENHANCEMENT</h1>
+    <p>Tower-to-Tower Fiber Recovery Control Tower • submit span → parent/child → recovery → milestone</p>
+  </div>
+  <div class="actions">
+    <span class="session"><span id="sessionUser"></span><span class="role-badge" id="sessionRole"></span></span>
+    <button class="btn-light" onclick="downloadCSV()">Export Excel/CSV</button>
+    <button class="btn-blue updater-only" onclick="openSubmitModal()">+ Submit / Upload Span</button>
+    
+    <button class="btn-light" onclick="logout()">Logout</button>
+  </div>
+</header>
+
+<main class="container">
+<section class="filters">
+  <div class="filter"><label>Recovery Program</label><select id="program"><option>Quality Enhancement / Fiber Recovery</option></select></div>
+  <div class="filter"><label>Region</label><select id="region"><option>All Regions</option><option>Sumatera</option><option>Jawa</option><option>Kalimantan</option><option>Sulawesi</option></select></div>
+  <div class="filter"><label>Recovery Status</label><select id="status"><option>All Status</option><option>On Track</option><option>Watch</option><option>Critical</option></select></div>
+  <div class="filter"><label>Mitra / Subcont</label><select id="mitraFilter"><option value="ALL">All Mitra / Subcont</option></select></div>
+  <div class="filter"><label>Project Search</label><input id="search" placeholder="Nama project..."></div>
+  <div style="margin-left:auto;display:flex;gap:6px;align-items:center;flex-wrap:wrap"><span class="badge" id="dbStatus">Supabase: connecting...</span><span class="badge" id="lastUpdate">Data: empty • belum ada span recovery</span></div>
+</section>
+
+
+<section class="submit-modal" id="submitModal">
+  <div class="submit-box">
+    <div class="submit-head">
+      <div><h3>SUBMIT / UPLOAD RECOVERY SPAN</h3><p>Masukkan span yang akan masuk ke program recovery. Data awal belum memiliki Parent / Child.</p></div>
+      <button class="admin-close" onclick="closeSubmitModal()">Tutup</button>
+    </div>
+    <div class="submit-body">
+      <div class="admin-parent-note">Tahap awal hanya membutuhkan <b>Site A, Site B, Region, dan Length</b>. Setelah submit, span masuk sebagai <b>Standalone / Unclassified</b> dan dapat dikategorikan menjadi Parent atau Child melalui menu Update Span.</div>
+      <div class="submit-grid" style="margin-top:10px">
+        <div class="submit-field"><label>Site A</label><input id="submitSiteA" placeholder="BDG-001"></div>
+        <div class="submit-field"><label>Site B</label><input id="submitSiteB" placeholder="BDG-014"></div>
+        <div class="submit-field"><label>Region</label><input id="submitRegion" placeholder="Jawa Barat"></div>
+        <div class="submit-field"><label>Length (Km)</label><input id="submitLength" type="number" min="0" step="0.1" placeholder="12.6"></div>
+        <button class="btn-blue" onclick="addSubmitRow()">+ Tambah</button>
+      </div>
+      <div class="submit-list"><table><thead><tr><th>No</th><th>Site A</th><th>Site B</th><th>Region</th><th>Length (Km)</th><th>Action</th></tr></thead><tbody id="submitRows"><tr><td colspan="6" class="child-admin-empty">Belum ada span yang akan disubmit.</td></tr></tbody></table></div>
+      <div class="submit-footer">
+        <div class="submit-import"><label>Upload CSV <input id="spanCsvInput" type="file" accept=".csv" onchange="handleSpanCSV(this.files[0]);this.value=''"> </label><button class="btn-light" onclick="downloadSpanTemplate()">Download Template</button><span class="submit-note">Format: Site A, Site B, Region, Length</span></div>
+        <div class="admin-actions" style="margin-top:0"><button class="btn-light" onclick="closeSubmitModal()">Batal</button><button class="btn-blue" onclick="submitSpanBatch()">Submit Span</button></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="card admin-panel" id="adminPanel">
+  <div class="table-head">
+    <div>
+      <h3 class="card-title" style="margin:0">ADMIN — UPDATE RECOVERY SPAN</h3>
+      <div class="admin-note">Update mengikuti struktur Parent Span → Child Span. Nilai Parent untuk Length, Recovered dan Progress dihitung otomatis dari seluruh Child Span.</div>
+    </div>
+    <span><span class="badge">Updater Control</span><button class="admin-close" onclick="closeEditor()">Tutup</button></span>
+  </div>
+
+  <div class="admin-grid">
+    <div class="card" style="padding:10px">
+      <div class="admin-form">
+        <div class="admin-field full">
+          <label>Pilih Parent / Child Span</label>
+          <select id="adminSpan"></select>
+        </div>
+        <div class="admin-field full" id="adminHierarchyInfo"></div>
+        <div class="admin-field full hierarchy-box">
+          <div class="admin-field"><label>Kategori Span</label><select id="adminRole" onchange="handleAdminRoleChange()"><option value="standalone">Standalone / Unclassified</option><option value="parent">Parent</option><option value="child">Child</option></select></div>
+          <div class="admin-field"><label>Parent Span</label><select id="adminParentSelect"><option value="">— Tidak ada Parent —</option></select></div>
+        </div>
+        <div class="admin-field">
+          <label>Length (Km)</label>
+          <input id="adminLength" type="number" readonly>
+        </div>
+        <div class="admin-field">
+          <label>Recovered Length (Km)</label>
+          <input id="adminRecovered" type="number" min="0" step="0.1">
+        </div>
+        <div class="admin-field">
+          <label>Progress (%)</label>
+          <input id="adminProgress" type="number" min="0" max="100" step="1">
+        </div>
+        <div class="admin-field">
+          <label>Status Recovery</label>
+          <select id="adminStatus"><option>On Track</option><option>Watch</option><option>Critical</option></select>
+        </div>
+        <div class="admin-field">
+          <label>Mitra / Subcont</label>
+          <input id="adminPIC" type="text" placeholder="Nama mitra / subcont">
+        </div>
+        <div class="admin-field">
+          <label>Recovery Type</label>
+          <input id="adminRecoveryType" type="text" placeholder="Jenis recovery">
+        </div>
+        <div class="admin-field">
+          <label>Target Completion</label>
+          <input id="adminTarget" type="date">
+        </div>
+        <div class="admin-field full">
+          <label>Issue / Root Cause</label>
+          <textarea id="adminIssue"></textarea>
+        </div>
+        <div class="admin-field full">
+          <label>Dokumen Span — BoQ / ABD / KMZ</label>
+          <div class="doc-list" id="adminDocs"></div>
+          <label class="doc-upload" style="width:max-content">+ Upload Dokumen <input id="docInput" type="file" multiple accept=".xlsx,.xls,.csv,.pdf,.kmz,.kml,.doc,.docx,.zip"></label>
+          <div class="admin-note">Dokumen tersimpan lokal pada browser prototype. Untuk produksi/multi-user, gunakan Firebase Storage / server repository.</div>
+        </div>
+      </div>
+      <div class="admin-actions">
+        <button class="btn-light" onclick="loadAdminSpan()">Reload</button>
+        <button class="btn-blue" onclick="saveAdminSpan()">Save Update</button>
+      </div>
+    </div>
+
+    <div class="card" style="padding:10px">
+      <div class="table-head">
+        <div><h4 style="margin:0;color:#2c3e50">Child Span Detail</h4><div class="admin-note" id="childSummary"></div></div>
+      </div>
+      <div class="child-admin-wrap">
+        <table class="child-admin-table">
+          <thead><tr><th>Child Span</th><th>Site A → Site B</th><th>Length</th><th>Recovered</th><th>Progress</th><th>Status</th><th>Target</th><th>Mitra / Subcont</th><th>Action</th></tr></thead>
+          <tbody id="adminChildRows"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="milestone-focus" id="milestoneFocus">
+  <div class="milestone-focus-box">
+    <div class="table-head"><div><h3 class="card-title" style="margin:0">Update Milestone</h3><div class="admin-note" id="focusSubtitle"></div></div><button class="admin-close" onclick="closeMilestoneEditor()">Tutup</button></div>
+    <div class="milestone-focus-grid">
+      <div><label>Milestone</label><input id="focusName" readonly></div>
+      <div><label>Plan Date</label><input id="focusPlan" type="date"></div>
+      <div><label>Actual Date</label><input id="focusActual" type="date"></div>
+      <div><label>Status</label><select id="focusStatus"><option>Plan</option><option>Active</option><option>Done</option><option>Late</option></select></div>
+      <div class="focus-timing"><label>Timing</label><div id="focusTiming">—</div></div>
+    </div>
+    <div class="admin-actions"><button class="btn-light" onclick="closeMilestoneEditor()">Cancel</button><button class="btn-blue" onclick="saveMilestoneFocus()">Save Milestone</button></div>
+  </div>
+</div>
+
+<section class="kpis">
+  <div class="kpi k1"><div class="label">TOTAL SPAN</div><div class="value" id="kProjects">0</div><div class="sub">site-to-site recovery span</div></div>
+  <div class="kpi k2"><div class="label">TOTAL LENGTH</div><div class="value" id="kBudget">0 Km</div><div class="sub">fiber length in scope</div></div>
+  <div class="kpi k3"><div class="label">RECOVERED LENGTH</div><div class="value" id="kCommitted">0 Km</div><div class="sub">quality enhancement completed</div></div>
+  <div class="kpi k4"><div class="label">REMAINING LENGTH</div><div class="value" id="kForecast">0 Km</div><div class="sub">remaining recovery</div></div>
+  <div class="kpi k5"><div class="label">CRITICAL SPAN</div><div class="value" id="kVariance">0</div><div class="sub">requires management attention</div></div>
+  <div class="kpi k6"><div class="label">OVERALL PROGRESS</div><div class="value" id="kPaid">0%</div><div class="sub">recovered / total length</div></div>
+</section>
+
+<section class="grid-top">
+  <div class="card"><h3 class="card-title">Fiber Recovery Map — Site to Site</h3><div id="map" class="mapbox"></div></div>
+  <div class="card"><h3 class="card-title">Recovery Phase</h3><div class="chartbox"><canvas id="phaseChart"></canvas></div></div>
+  <div class="card"><h3 class="card-title">Finance</h3><div class="chartbox"><canvas id="financeChart"></canvas></div></div>
+  <div class="card"><h3 class="card-title">Recovery Health</h3><div class="health" id="healthRows"></div></div>
+</section>
+
+<section class="card table-card">
+  <div class="table-head"><h3 class="card-title" style="margin:0">Fiber Recovery Table — Span Site to Site</h3><span class="badge" id="countBadge">0 projects</span></div>
+  <div class="milestone-controls table-controls">
+    <div class="filter"><label>Select Span</label>
+      <select id="tableSpan"><option value="ALL">All Spans</option></select>
+    </div>
+    <div class="filter"><label>Region</label>
+      <select id="tableRegion"><option value="ALL">All Regions</option></select>
+    </div>
+    <div class="filter"><label>Recovery Type</label>
+      <select id="tableRecovery"><option value="ALL">All Recovery Types</option></select>
+    </div>
+    <div class="filter"><label>Status</label>
+      <select id="tableStatus"><option value="ALL">All Status</option><option>On Track</option><option>Watch</option><option>Critical</option></select>
+    </div>
+  </div>
+  <div class="table-wrap">
+  <table><thead>
+    <tr>
+      <th>Span ID</th><th>Site A</th><th>Site B</th><th>Region</th><th>Length</th><th>Issue / Root Cause</th><th>Recovery Type</th><th>Recovered</th><th>Progress</th><th>Target</th><th>Status</th><th>Mitra / Subcont</th><th>Documents</th><th class="updater-only">Action</th>
+    </tr>
+  </thead><tbody id="projectRows"></tbody></table>
+  </div>
+</section>
+
+
+<section class="card milestone-card">
+  <div class="table-head">
+    <div>
+      <h3 class="card-title" style="margin:0">Span Milestone — Recovery Workplan</h3>
+      <div style="font-size:10px;color:#73808d;margin-top:3px">
+        End-to-end control per span: Survey → Engineering/BoQ → Material & Manpower Preparation → Execution → Testing → Acceptance → Closing
+      </div>
+    </div>
+    <span class="badge">8 milestones / span</span>
+  </div>
+  <div class="milestone-controls">
+    <div class="filter"><label>Select Span</label>
+      <select id="milestoneSpan"><option value="ALL">All Spans</option></select>
+    </div>
+    <div class="filter"><label>Milestone Status</label>
+      <select id="milestoneStatus"><option>All</option><option>Done</option><option>Active</option><option>Late</option><option>Plan</option></select>
+    </div>
+  </div>
+  <div class="milestone-wrap">
+    <table class="milestone-table">
+      <thead><tr>
+        <th>Span</th><th>Site A → Site B</th><th>Length</th>
+        <th>Survey<br><small>Plan | Actual | Status</small></th><th>Engineering / BoQ<br><small>Plan | Actual | Status</small></th><th>Material Ready<br><small>Plan | Actual | Status</small></th><th>Manpower Ready<br><small>Plan | Actual | Status</small></th>
+        <th>Execution<br><small>Plan | Actual | Status</small></th><th>Testing / OTDR<br><small>Plan | Actual | Status</small></th><th>Acceptance / QE<br><small>Plan | Actual | Status</small></th><th>Closing<br><small>Plan | Actual | Status</small></th>
+      </tr></thead>
+      <tbody id="milestoneRows"></tbody>
+    </table>
+  </div>
+  <div class="milestone-legend">
+    <span><i class="ms-dot ms-done"></i> Done</span>
+    <span><i class="ms-dot ms-active"></i> Active</span>
+    <span><i class="ms-dot ms-late"></i> Late / Attention</span>
+    <span><i class="ms-dot ms-plan"></i> Plan</span>
+  </div>
+</section>
+
+<section class="bottom">
+  <div class="card"><h3 class="card-title">Recovery Length by Span</h3><div class="chartbox"><canvas id="budgetChart"></canvas></div><div class="legend"><span><i style="background:#f28b24"></i>Budget</span><span><i style="background:#399bd0"></i>Forecast</span><span><i style="background:#53b56d"></i>Paid</span></div></div>
+  <div class="card"><h3 class="card-title">Recovery Progress Trend</h3><div class="chartbox"><canvas id="cashChart"></canvas></div></div>
+</section>
+<div class="footer">Demo Mode • Dashboard fokus pada analisis, filter, milestone, parent/child dan workflow. Supabase dapat diaktifkan kembali setelah desain dashboard final.</div>
+</main>
+
+<script>
+// Ganti dua nilai berikut dengan Project URL dan Publishable Key dari Supabase. Jangan gunakan service_role key di browser.
+const SUPABASE_URL = 'https://eixehtqgwlztnwygqlsw.supabase.co';
+const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_wLF9Kam9cxVEbVsXkRg3KA_9ccGRjrZ';
+const SUPABASE_READY = SUPABASE_URL.startsWith('https://') && !SUPABASE_URL.includes('YOUR_') && !SUPABASE_PUBLISHABLE_KEY.includes('YOUR_');
+const { createClient } = window.supabase;
+const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, { auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true} });
+let session = null;
+function setDbStatus(text,ok=false){const el=document.getElementById('dbStatus');if(el){el.textContent=text;el.style.background=ok?'#e5f5e9':'#fff2d9';el.style.color=ok?'#258344':'#9b680b';}}
+async function fetchRole(user){
+  const {data:profile,error}=await supabase.from('profiles').select('role,display_name').eq('id',user.id).single();
+  if(error) throw error;
+  const role=profile?.role==='updater'?'Updater':'Viewer';
+  return {username:profile?.display_name||user.email, email:user.email, role, canUpdate:role==='Updater', userId:user.id};
+}
+function login(e){
+  e.preventDefault();
+  const username=document.getElementById('loginUser').value.trim().toLowerCase();
+  const password=document.getElementById('loginPass').value;
+  const errorEl=document.getElementById('loginError');
+  errorEl.textContent='';
+  const accounts={
+    viewer:{password:'viewer123',username:'Viewer Recovery',role:'Viewer',canUpdate:false},
+    operator:{password:'operator123',username:'Operator Recovery',role:'Updater',canUpdate:true}
+  };
+  const acc=accounts[username];
+  if(!acc || acc.password!==password){errorEl.textContent='Username atau password salah.';return;}
+  session={username:acc.username,email:username+'@local',role:acc.role,canUpdate:acc.canUpdate,userId:'local-'+username};
+  localStorage.setItem('fiberRecoveryDemoSession',JSON.stringify(session));
+  applySession();
+  data=sampleProjects.map(x=>JSON.parse(JSON.stringify(x)));
+  populateGlobalMitraFilter(); initAdmin(); update();
+  setDbStatus('Demo Mode • local data',true);
+}
+
+function applySession(){
+  document.getElementById('loginScreen').style.display='none';
+  document.getElementById('sessionUser').textContent=session.username;
+  const rb=document.getElementById('sessionRole'); rb.textContent=session.role; rb.className='role-badge '+(session.canUpdate?'updater':'viewer');
+  document.querySelectorAll('.updater-only').forEach(el=>el.style.display=session.canUpdate?'':'none');
+  closeEditor(); update();
+}
+function logout(){localStorage.removeItem('fiberRecoveryDemoSession');session=null;document.getElementById('loginScreen').style.display='flex';document.getElementById('loginUser').value='';document.getElementById('loginPass').value='';document.getElementById('loginError').textContent='';}
+function canUpdate(){return !!session && session.canUpdate;}
+function closeEditor(){document.getElementById('adminPanel').classList.remove('open');}
+async function auditLog(message){
+  if(!session?.userId)return;
+  const {error}=await supabase.from('audit_logs').insert({user_id:session.userId,message});
+  if(error) console.warn('Audit log:',error.message);
+}
+
+const sampleProjects = [
+{id:"SP-001",siteA:"BDG-001",siteB:"BDG-014",region:"Jawa Barat",length:12.6,recovered:8.4,progress:67,recoveryType:"Re-route / Re-splicing",target:"2026-10-15",status:"On Track",quality:"Green",issue:"Link degradation",pic:"FO Team 1",mitra:"PT Fiber Mitra A",statusMitra:"Active",action:"",milestones:{},lat:-6.914,lng:107.609,lat2:-6.87,lng2:107.59},
+{id:"SP-001.1",parentId:"SP-001",siteA:"BDG-001",siteB:"BDG-005",region:"Jawa Barat",length:4.2,recovered:4.2,progress:100,recoveryType:"Cable Replacement",target:"2026-10-10",status:"On Track",quality:"Green",issue:"Duct blockage",pic:"FO Team 1",mitra:"PT Fiber Mitra A",statusMitra:"Active",action:"",milestones:{},lat:-6.914,lng:107.609,lat2:-6.895,lng2:107.60},
+{id:"SP-001.2",parentId:"SP-001",siteA:"BDG-005",siteB:"BDG-010",region:"Jawa Barat",length:4.1,recovered:2.6,progress:63,recoveryType:"Re-splicing",target:"2026-10-15",status:"On Track",quality:"Green",issue:"Fiber cut",pic:"FO Team 1",mitra:"PT Fiber Mitra A",statusMitra:"Active",action:"",milestones:{},lat:-6.895,lng:107.60,lat2:-6.88,lng2:107.595},
+{id:"SP-001.3",parentId:"SP-001",siteA:"BDG-010",siteB:"BDG-014",region:"Jawa Barat",length:4.3,recovered:1.6,progress:37,recoveryType:"Ring Optimization",target:"2026-10-20",status:"Critical",quality:"Red",issue:"Link degradation",pic:"FO Team 1",mitra:"PT Fiber Mitra A",statusMitra:"Active",action:"",milestones:{},lat:-6.88,lng:107.595,lat2:-6.87,lng2:107.59},
+{id:"SP-002",siteA:"BDG-014",siteB:"BDG-027",region:"Jawa Barat",length:8.4,recovered:6.2,progress:74,recoveryType:"Cable Replacement",target:"2026-10-08",status:"Watch",quality:"Amber",issue:"High attenuation",pic:"FO Team 2",mitra:"PT Fiber Mitra B",statusMitra:"Active",action:"",milestones:{},lat:-6.87,lng:107.59,lat2:-6.82,lng2:107.56},
+{id:"SP-003",siteA:"JKT-101",siteB:"JKT-118",region:"Jabodetabek",length:5.8,recovered:5.8,progress:100,recoveryType:"Core Re-arrangement",target:"2026-09-25",status:"On Track",quality:"Green",issue:"Core congestion",pic:"FO Team 3",mitra:"PT Fiber Mitra C",statusMitra:"Active",action:"",milestones:{},lat:-6.20,lng:106.82,lat2:-6.18,lng2:106.84},
+{id:"SP-004",siteA:"JKT-118",siteB:"JKT-135",region:"Jabodetabek",length:9.7,recovered:4.1,progress:42,recoveryType:"New Fiber / Ring Optimization",target:"2026-10-15",status:"Critical",quality:"Red",issue:"Repeated failure / degraded segment",pic:"FO Team 4",mitra:"PT Fiber Mitra D",statusMitra:"Active",action:"",milestones:{},lat:-6.18,lng:106.84,lat2:-6.16,lng2:106.88},
+{id:"SP-005",siteA:"SBY-201",siteB:"SBY-219",region:"Jawa Timur",length:14.2,recovered:10.0,progress:70,recoveryType:"Cable Replacement",target:"2026-10-20",status:"Watch",quality:"Amber",issue:"High attenuation",pic:"FO Team 5",mitra:"PT Fiber Mitra E",statusMitra:"Active",action:"",milestones:{},lat:-7.25,lng:112.75,lat2:-7.22,lng2:112.78},
+{id:"SP-006",siteA:"PKU-031",siteB:"PKU-044",region:"Sumatera",length:18.5,recovered:9.3,progress:50,recoveryType:"Ultimate Ring Redesign",target:"2026-11-05",status:"Watch",quality:"Amber",issue:"Ring vulnerability",pic:"FO Team 6",mitra:"PT Fiber Mitra F",statusMitra:"Active",action:"",milestones:{},lat:0.51,lng:101.45,lat2:0.56,lng2:101.48},
+{id:"SP-007",siteA:"PLB-011",siteB:"PLB-024",region:"Sumatera",length:11.3,recovered:11.3,progress:100,recoveryType:"Core / Bundle Split",target:"2026-09-30",status:"On Track",quality:"Green",issue:"Bundle dependency",pic:"FO Team 7",mitra:"PT Fiber Mitra G",statusMitra:"Active",action:"",milestones:{},lat:-2.99,lng:104.76,lat2:-2.96,lng2:104.79},
+{id:"SP-008",siteA:"BPN-041",siteB:"BPN-057",region:"Kalimantan",length:16.8,recovered:5.0,progress:30,recoveryType:"New Fiber / Ring Optimization",target:"2026-11-25",status:"Critical",quality:"Red",issue:"Physical cable degradation",pic:"FO Team 8",mitra:"PT Fiber Mitra H",statusMitra:"Active",action:"",milestones:{},lat:-1.27,lng:116.83,lat2:-1.23,lng2:116.86}
+];
+
+let data = [], charts={}, markers=[], lines=[];
+const rupiah = n => { if(Math.abs(n)>=1e9)return "Rp "+(n/1e9).toFixed(1)+"B"; if(Math.abs(n)>=1e6)return "Rp "+(n/1e6).toFixed(0)+"M"; return "Rp "+n.toLocaleString("id-ID")};
+const fullRp = n => "Rp "+Math.round(n).toLocaleString("id-ID");
+const statusClass = s => s.toLowerCase()==="critical"?"red":s.toLowerCase()==="watch"?"amber":"green";
+const healthClass = s => s.toLowerCase();
+
+const map = L.map('map',{zoomControl:false}).setView([-2.2,116.0],4.3);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap'}).addTo(map);
+L.control.zoom({position:'bottomright'}).addTo(map);
+
+
+async function saveDocFile(spanId,file){
+  const path=`${spanId}/${crypto.randomUUID()}-${file.name.replace(/[^a-zA-Z0-9._-]/g,'_')}`;
+  const {error}=await supabase.storage.from('span-documents').upload(path,file,{upsert:false,contentType:file.type||'application/octet-stream'});
+  if(error) throw error; return {id:path,name:file.name,type:file.type||'application/octet-stream',size:file.size,path};
+}
+async function listDocFiles(spanId){
+  const {data,error}=await supabase.storage.from('span-documents').list(spanId,{limit:100,sortBy:{column:'created_at',order:'desc'}});
+  if(error) throw error;
+  return (data||[]).map(f=>({id:`${spanId}/${f.name}`,name:f.name.replace(/^.*?-/,''),path:`${spanId}/${f.name}`}));
+}
+async function deleteDocFile(path){const {error}=await supabase.storage.from('span-documents').remove([path]);if(error)throw error;}
+async function downloadDoc(path){const {data,error}=await supabase.storage.from('span-documents').download(path);if(error)throw error;const url=URL.createObjectURL(data);const a=document.createElement('a');a.href=url;a.download=path.split('/').pop().replace(/^.*?-/,'');a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}
+async function renderAdminDocs(spanId){const el=document.getElementById('adminDocs');if(!el)return;try{const files=await listDocFiles(spanId);el.innerHTML=files.length?files.map(f=>`<span class="doc-chip"><a href="#" onclick="downloadDoc('${f.path}');return false">${escapeHtml(f.name)}</a><a href="#" title="Hapus" onclick="removeDoc('${f.path}','${spanId}');return false" style="color:#c33">×</a></span>`).join(''):'<span class="doc-empty">Belum ada dokumen</span>'}catch(e){el.innerHTML='<span class="doc-empty">Storage belum siap</span>';}}
+async function removeDoc(path,spanId){if(!canUpdate())return;if(!confirm('Hapus dokumen ini?'))return;try{await deleteDocFile(path);await auditLog(`Delete document on ${spanId}`);await renderAdminDocs(spanId);await renderTableDocs()}catch(e){alert('Gagal menghapus dokumen: '+e.message)}}
+async function uploadDocs(spanId,files){try{for(const f of files){await saveDocFile(spanId,f);await auditLog(`Upload document ${f.name} on ${spanId}`)}await renderAdminDocs(spanId);await renderTableDocs()}catch(e){alert('Gagal upload dokumen: '+e.message)}}
+async function renderTableDocs(){const cells=document.querySelectorAll('.docs-cell[data-span]');for(const c of cells){try{const files=await listDocFiles(c.dataset.span);const links=files.map(f=>`<a class="doc-chip" href="#" onclick="downloadDoc('${f.path}');return false">${escapeHtml(f.name)}</a>`).join('');const upload=canUpdate()?`<label class="doc-upload">+ Upload<input type="file" multiple accept=".xlsx,.xls,.csv,.pdf,.kmz,.kml,.doc,.docx,.zip" onchange="uploadDocs('${c.dataset.span}',this.files);this.value=''">`:' ';c.innerHTML=`<div class="doc-list">${links}${upload}</div>${files.length?'':'<span class="doc-empty">No document</span>'}`}catch(e){c.innerHTML='<span class="doc-empty">Storage belum siap</span>'}}}
+
+const expandedParents=new Set();
+function childrenOf(id){return data.filter(x=>x.parentId===id);}
+function isParent(x){return !x.parentId;}
+function spanRole(x){ const hasChildren=childrenOf(x.id).length>0; if(x.parentId) return 'child'; if(x.spanRole==='parent'||hasChildren) return 'parent'; return 'standalone'; }
+function topLevelData(){return data.filter(isParent);}
+function descendantsMatch(x, r, st, m, q){
+  return childrenOf(x.id).some(c=> (r==="All Regions"||c.region===r) && (st==="All Status"||c.status===st) && (m==="ALL"||c.mitra===m) && (`${c.id} ${c.siteA} ${c.siteB} ${c.issue} ${c.mitra}`.toLowerCase().includes(q)));
+}
+function parentVisible(x,r,st,m,q){
+  return (r==="All Regions"||x.region===r) && (st==="All Status"||x.status===st) && (m==="ALL"||x.mitra===m) && (`${x.id} ${x.siteA} ${x.siteB} ${x.issue} ${x.mitra}`.toLowerCase().includes(q) || descendantsMatch(x,r,st,m,q));
+}
+function hierarchyRows(spans){
+  const out=[];
+  spans.forEach(x=>{
+    out.push(x);
+    if(expandedParents.has(x.id)) childrenOf(x.id).forEach(c=>out.push(c));
+  });
+  return out;
+}
+function aggregateParent(x){
+  const ch=childrenOf(x.id); if(!ch.length) return x;
+  const length=ch.reduce((a,c)=>a+Number(c.length||0),0);
+  const recovered=ch.reduce((a,c)=>a+Number(c.recovered||0),0);
+  const progress=length?Math.round(recovered/length*100):0;
+  return {...x,length,recovered,progress};
+}
+function toggleParent(id){
+  if(expandedParents.has(id)) expandedParents.delete(id); else expandedParents.add(id);
+  update();
+}
+function filtered(){
+ const r=document.getElementById('region').value,s=document.getElementById('status').value,m=document.getElementById('mitraFilter')?.value||'ALL',q=document.getElementById('search').value.toLowerCase();
+ return topLevelData().filter(x=>parentVisible(x,r,s,m,q));
+}
+function populateGlobalMitraFilter(){
+ const el=document.getElementById('mitraFilter');
+ if(!el)return;
+ const cur=el.value;
+ const mitras=[...new Set(data.map(x=>x.mitra).filter(Boolean))].sort();
+ el.innerHTML='<option value="ALL">All Mitra / Subcont</option>'+mitras.map(v=>`<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('');
+ el.value=mitras.includes(cur)?cur:'ALL';
+}
+function populateTableFilters(){
+ const span=document.getElementById('tableSpan'), region=document.getElementById('tableRegion'), recovery=document.getElementById('tableRecovery');
+ if(!span||!region||!recovery)return;
+ const curS=span.value,curR=region.value,curT=recovery.value;
+ const spans=topLevelData().map(x=>x.id).filter(Boolean).sort();
+ const regions=[...new Set(topLevelData().map(x=>x.region).filter(Boolean))].sort();
+ const types=[...new Set(topLevelData().map(x=>x.recoveryType).filter(Boolean))].sort();
+ span.innerHTML='<option value="ALL">All Spans</option>'+spans.map(v=>`<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('');
+ region.innerHTML='<option value="ALL">All Regions</option>'+regions.map(v=>`<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('');
+ recovery.innerHTML='<option value="ALL">All Recovery Types</option>'+types.map(v=>`<option value="${escapeHtml(v)}">${escapeHtml(v)}</option>`).join('');
+ span.value=spans.includes(curS)?curS:'ALL'; region.value=regions.includes(curR)?curR:'ALL'; recovery.value=types.includes(curT)?curT:'ALL';
+}
+function escapeHtml(v){return String(v??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));}
+function renderProjectTable(d){
+ populateTableFilters();
+ const fs=document.getElementById('tableSpan')?.value||'ALL';
+ const fr=document.getElementById('tableRegion')?.value||'ALL';
+ const ft=document.getElementById('tableRecovery')?.value||'ALL';
+ const fstatus=document.getElementById('tableStatus')?.value||'ALL';
+ const parents=d.filter(x=>(fs==='ALL'||x.id===fs)&&(fr==='ALL'||x.region===fr)&&(ft==='ALL'||x.recoveryType===ft)&&(fstatus==='ALL'||x.status===fstatus));
+ const visible=hierarchyRows(parents);
+ const rows=visible.map(x=>{
+   const parent=!x.parentId, ch=parent?childrenOf(x.id):[], a=ch.length?aggregateParent(x):x, role=spanRole(x);
+   const expanded=expandedParents.has(x.id);
+   const toggle=parent&&ch.length?`<button class="parent-toggle" onclick="toggleParent('${x.id}')" title="${expanded?'Collapse':'Expand'} child span">${expanded?'−':'+'}</button>`:'';
+   const childLabel=!parent?`<span class="tree-line"></span>`:'';
+   const badge=parent&&ch.length?`<span class="child-badge">${ch.length} Child Span${ch.length>1?'s':''}</span>`:role==='standalone'?`<span class="child-badge" style="background:#f0f3f5;color:#687784">Standalone</span>`:'';
+   const rowClass=parent?'parent-row':'child-row';
+   return `<tr class="${rowClass}">
+<td class="project"><span class="${parent?'child-span-id':'child-span-id'}">${childLabel}${toggle}<span>${x.id}</span></span>${badge}${parent&&ch.length?`<div class="parent-summary">Parent span • ${a.length.toFixed(1)} Km scope</div>`:''}</td>
+<td><b>${x.siteA}</b></td><td><b>${x.siteB}</b></td><td>${x.region}</td>
+<td><b>${Number(a.length||0).toFixed(1)} Km</b></td><td>${x.issue||"—"}</td><td>${x.recoveryType||"—"}</td><td>${Number(a.recovered||0).toFixed(1)} Km</td>
+<td><div class="progress"><span style="width:${Math.min(100,Number(a.progress||0))}%"></span></div> <b>${Math.round(Number(a.progress||0))}%</b></td>
+<td>${x.target?new Date(x.target).toLocaleDateString('id-ID',{day:'2-digit',month:'short',year:'numeric'}):'—'}</td>
+<td><span class="pill ${statusClass(x.status)}">${x.status}</span></td>
+<td>${x.mitra||"—"}</td><td class="docs-cell" data-span="${x.id}"><span class="doc-empty">Loading…</span></td><td class="updater-only"><button class="update-btn" onclick="openEditor('${x.id}')">Update</button></td></tr>`;
+ }).join('');
+ document.getElementById('projectRows').innerHTML=rows||`<tr><td colspan="14" style="padding:0"><div class="empty-state"><b>${data.length?'Tidak ada data yang sesuai filter.':'No Recovery Span Submitted'}</b><span>${data.length?'Coba ubah filter yang dipilih.':'Belum ada span yang masuk ke program recovery. Gunakan + Submit / Upload Span untuk memulai.'}</span></div></td></tr>`;
+ renderTableDocs();
+}
+function bindTableFilters(){
+ ['tableSpan','tableRegion','tableRecovery','tableStatus'].forEach(id=>document.getElementById(id)?.addEventListener('change',update));
+}
+
+function setText(id,v){document.getElementById(id).textContent=v}
+function update(){
+ const d=filtered(), total=d.reduce((a,x)=>a+x.length,0), rec=d.reduce((a,x)=>a+x.recovered,0);
+ const remaining=total-rec, critical=d.filter(x=>x.status==="Critical").length, pct=total?rec/total*100:0;
+ setText('kProjects',d.length);setText('kBudget',total.toFixed(1)+' Km');setText('kCommitted',rec.toFixed(1)+' Km');
+ setText('kForecast',remaining.toFixed(1)+' Km');setText('kVariance',critical);setText('kPaid',pct.toFixed(0)+'%');
+ setText('countBadge',d.length+' top-level spans');
+ renderProjectTable(d);
+ markers.forEach(m=>m.remove()); lines.forEach(l=>l.remove()); markers=[];lines=[];
+ d.forEach(x=>{
+   if(!Number.isFinite(Number(x.lat))||!Number.isFinite(Number(x.lng))||!Number.isFinite(Number(x.lat2))||!Number.isFinite(Number(x.lng2))) return;
+   const color=x.status==="Critical"?"#e95a61":x.status==="Watch"?"#f0a228":"#49ad67";
+   const line=L.polyline([[x.lat,x.lng],[x.lat2,x.lng2]],{color,weight:4,opacity:.85,dashArray:x.status==="Critical"?'7 5':null}).addTo(map);
+   line.bindPopup(`<b>${x.id} — ${x.siteA} → ${x.siteB}</b><br>Length: ${x.length.toFixed(1)} Km<br>Recovered: ${x.recovered.toFixed(1)} Km<br>Progress: ${x.progress}%<br>Status: ${x.status}<br>Issue: ${x.issue}`);
+   lines.push(line);
+   [[x.lat,x.lng,x.siteA],[x.lat2,x.lng2,x.siteB]].forEach(pt=>{
+     markers.push(L.circleMarker([pt[0],pt[1]],{radius:6,color:'#fff',weight:2,fillColor:color,fillOpacity:.95}).addTo(map).bindTooltip(pt[2]));
+   });
+ });
+ renderCharts(d);renderHealth(d);renderMilestones();renderTableDocs();
+}
+function destroy(k){if(charts[k])charts[k].destroy()}
+function renderCharts(d){
+ const total=d.reduce((a,x)=>a+x.length,0), rec=d.reduce((a,x)=>a+x.recovered,0);
+ destroy('phase');charts.phase=new Chart(document.getElementById('phaseChart'),{type:'doughnut',data:{labels:['Completed','In Progress','Critical'],datasets:[{data:[d.filter(x=>x.progress===100).length,d.filter(x=>x.progress<100&&x.status!=="Critical").length,d.filter(x=>x.status==="Critical").length],backgroundColor:['#49ad67','#f0a228','#e95a61'],borderColor:'#fff',borderWidth:2}]},options:{responsive:true,maintainAspectRatio:false,cutout:'58%',plugins:{legend:{position:'bottom',labels:{font:{size:9},boxWidth:10,padding:7}}}}});
+ destroy('finance');charts.finance=new Chart(document.getElementById('financeChart'),{type:'bar',data:{labels:['Total Scope','Recovered','Remaining'],datasets:[{data:[total,rec,total-rec],backgroundColor:['#399bd0','#53b56d','#ef6d1c'],borderRadius:3}]},options:{responsive:true,maintainAspectRatio:false,indexAxis:'y',plugins:{legend:{display:false}},scales:{x:{ticks:{font:{size:8},callback:v=>v+' Km'}},y:{ticks:{font:{size:9}}}}}});
+ const labels=d.map(x=>x.id);
+ destroy('budget');charts.budget=new Chart(document.getElementById('budgetChart'),{type:'bar',data:{labels,datasets:[{label:'Scope Km',data:d.map(x=>x.length),backgroundColor:'#f28b24'},{label:'Recovered Km',data:d.map(x=>x.recovered),backgroundColor:'#399bd0'}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{font:{size:8}}},y:{ticks:{font:{size:8},callback:v=>v+' Km'}}}}});
+ const months=['Jun','Jul','Aug','Sep','Oct','Nov','Dec','Jan','Feb','Mar'];
+ const avg=d.length?d.reduce((a,x)=>a+x.progress,0)/d.length:0;
+ const trend=months.map((_,i)=>Math.min(100,Math.round(Math.max(5,avg-28+i*7))));
+ destroy('cash');charts.cash=new Chart(document.getElementById('cashChart'),{type:'line',data:{labels:months,datasets:[{label:'Recovery Progress',data:trend,borderWidth:3,tension:.35,fill:false},{label:'Target',data:months.map(()=>90),borderWidth:2,borderDash:[6,5],fill:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{font:{size:9}}}},scales:{y:{min:0,max:100,ticks:{font:{size:8},callback:v=>v+'%'}},x:{ticks:{font:{size:8}}}}}});
+}
+function renderHealth(d){
+ const rows=[['Quality','quality'],['Time','status'],['Risk','status'],['Recovery','status']];
+ document.getElementById('healthRows').innerHTML=rows.map(([label,key])=>{
+  let red=0,amber=0,green=0;d.forEach(x=>{let v=x[key];if(key==='status'){if(v==='Critical')red++;else if(v==='Watch')amber++;else green++;}else{if(v==='Red')red++;else if(v==='Amber')amber++;else green++;}});
+  const t=Math.max(d.length,1),p=v=>v/t*100;
+  return `<div class="health-row"><div class="health-label">${label}</div><div class="bar"><span class="seg-red" style="width:${p(red)}%"></span><span class="seg-amber" style="width:${p(amber)}%"></span><span class="seg-green" style="width:${p(green)}%"></span></div><div class="health-num">${green}</div></div>`;
+ }).join('');
+}
+['region','status','search'].forEach(id=>document.getElementById(id).addEventListener('input',update));
+document.getElementById('mitraFilter').addEventListener('change',update);
+bindTableFilters();
+document.getElementById('milestoneSpan').addEventListener('change',renderMilestones);
+document.getElementById('milestoneStatus').addEventListener('change',renderMilestones);
+document.getElementById('adminSpan').addEventListener('change',loadAdminSpan);
+document.getElementById('docInput').addEventListener('change',async e=>{const id=document.getElementById('adminSpan').value;if(e.target.files.length)await uploadDocs(id,e.target.files);e.target.value='';});
+function bootstrap(){
+  data=sampleProjects.map(x=>JSON.parse(JSON.stringify(x)));
+  const saved=localStorage.getItem('fiberRecoveryDemoSession');
+  if(saved){try{session=JSON.parse(saved);applySession();}catch(e){localStorage.removeItem('fiberRecoveryDemoSession');}}
+  if(!session){document.getElementById('loginScreen').style.display='flex';setDbStatus('Demo Mode • login lokal',true);}
+  else {setDbStatus('Demo Mode • local data',true);populateGlobalMitraFilter();initAdmin();update();}
+}
+
+bootstrap();
+
+function downloadCSV(){
+ const d=filtered(), headers=['Project','Region','Program','Target','Progress','Budget','Forecast','Paid','Status','Scope','Time','Cost','Risk','Quality','Phase'];
+ const rows=d.map(x=>[x.id,x.siteA,x.siteB,x.region,x.length,x.recovered,x.progress,x.recoveryType,x.target,x.status,x.quality,x.issue,x.action||'',x.pic]);
+ const csv=[headers,...rows].map(r=>r.map(v=>`"${String(v).replaceAll('"','""')}"`).join(',')).join('\\n');
+ const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8;'}));a.download='project-recovery-dashboard.csv';a.click();
+}
+
+const milestoneTemplate = [
+  {key:"survey",name:"Survey / Assessment",offset:0},
+  {key:"boq",name:"Engineering / BoQ",offset:1},
+  {key:"material",name:"Material Ready",offset:2},
+  {key:"manpower",name:"Manpower Ready",offset:2},
+  {key:"execution",name:"Recovery Execution",offset:4},
+  {key:"testing",name:"Testing / OTDR",offset:7},
+  {key:"acceptance",name:"Acceptance / QE",offset:8},
+  {key:"closing",name:"Closing",offset:9}
+];
+
+function milestoneStatus(span,key){
+  const p=span.progress;
+  if(key==="survey") return p>=25?"Done":"Active";
+  if(key==="boq") return p>=35?"Done":p>=20?"Active":"Plan";
+  if(key==="material") return p>=45?"Done":p>=25?"Active":"Plan";
+  if(key==="manpower") return p>=45?"Done":p>=25?"Active":"Plan";
+  if(key==="execution") return p>=100?"Done":p>=50?"Active":span.status==="Critical"?"Late":"Plan";
+  if(key==="testing") return p>=90?"Done":p>=70?"Active":span.status==="Critical"?"Late":"Plan";
+  if(key==="acceptance") return p>=100?"Done":p>=90?"Active":"Plan";
+  return p>=100?"Done":p>=95?"Active":"Plan";
+}
+function milestoneDate(span,offset){
+  const d=new Date(span.target+"T00:00:00");
+  d.setDate(d.getDate()-(9-offset));
+  return d;
+}
+function fmtMSDate(d){
+  return d.toLocaleDateString('id-ID',{day:'2-digit',month:'short'});
+}
+function fmtDateISO(d){
+  const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,'0'),day=String(d.getDate()).padStart(2,'0');
+  return `${y}-${m}-${day}`;
+}
+function getMilestoneRecord(span,m){
+  const saved=span.milestones&&span.milestones[m.key];
+  const plan=saved&&saved.plan?saved.plan:fmtDateISO(milestoneDate(span,m.offset));
+  const status=saved&&saved.status?saved.status:milestoneStatus(span,m.key);
+  const actual=saved&&saved.actual?saved.actual:"";
+  return {plan,actual,status};
+}
+function getParentMilestoneRecord(parent,m){
+  const ch=childrenOf(parent.id);
+  if(!ch.length) return getMilestoneRecord(parent,m);
+  const recs=ch.map(c=>getMilestoneRecord(c,m));
+  const statuses=recs.map(r=>r.status);
+  let status="Plan";
+  if(statuses.includes("Late")) status="Late";
+  else if(statuses.every(v=>v==="Done")) status="Done";
+  else if(statuses.includes("Active")) status="Active";
+  const plans=recs.map(r=>r.plan).filter(Boolean).sort();
+  const actuals=recs.map(r=>r.actual).filter(Boolean).sort();
+  return {plan:plans[0]||fmtDateISO(milestoneDate(parent,m.offset)),actual:actuals[actuals.length-1]||"",status};
+}
+function renderMilestones(){
+  const sel=document.getElementById('milestoneSpan');
+  const old=sel.value;
+  sel.innerHTML='<option value="ALL">All Parent Spans</option>'+topLevelData().map(x=>`<option value="${x.id}">${x.id} — ${x.siteA} → ${x.siteB}</option>`).join('');
+  sel.value=topLevelData().some(x=>x.id===old)?old:'ALL';
+  const filter=document.getElementById('milestoneStatus').value;
+  let spans=filtered();
+  if(sel.value!=="ALL") spans=spans.filter(x=>x.id===sel.value);
+  const rows=[];
+  spans.forEach(x=>{
+    const a=aggregateParent(x), ch=childrenOf(x.id), expanded=expandedParents.has(x.id);
+    const cells=milestoneTemplate.map(m=>{
+      const rec=getParentMilestoneRecord(x,m), st=rec.status;
+      if(filter!=="All" && filter!==st) return '<td>—</td>';
+      const cls=st==="Done"?"ms-done":st==="Active"?"ms-active":st==="Late"?"ms-late":"ms-plan";
+      const timing=rec.actual&&rec.plan?(daysBetween(rec.plan,rec.actual)===0?"On plan":daysBetween(rec.plan,rec.actual)>0?`Delay +${daysBetween(rec.plan,rec.actual)} hari`:`Ahead ${Math.abs(daysBetween(rec.plan,rec.actual))} hari`):"";
+      return `<td><div class="ms"><span class="ms-dot ${cls}" title="${m.name}: ${st} (aggregated from child)"></span><b>${st}</b></div><span class="ms-date">Plan: ${fmtMSDate(new Date(rec.plan+"T00:00:00"))}${rec.actual?`<br>Actual: ${fmtMSDate(new Date(rec.actual+"T00:00:00"))}`:""}</span>${timing?`<small class="ms-timing">${timing}</small>`:""}<small class="parent-summary">Child summary</small></td>`;
+    }).join('');
+    rows.push(`<tr class="milestone-parent"><td class="project"><span class="ms-tree">${ch.length?`<button class="ms-parent-toggle" onclick="toggleParent('${x.id}')">${expanded?'−':'+'}</button>`:''}<b>${x.id}</b></span>${ch.length?`<span class="child-badge">${ch.length} Child Span${ch.length>1?'s':''}</span>`:''}</td><td><b>${x.siteA}</b> → <b>${x.siteB}</b></td><td><b>${a.length.toFixed(1)} Km</b></td>${cells}</tr>`);
+    if(expanded){
+      ch.forEach(c=>{
+        const ccells=milestoneTemplate.map(m=>{
+          const rec=getMilestoneRecord(c,m), st=rec.status;
+          if(filter!=="All" && filter!==st) return '<td>—</td>';
+          const cls=st==="Done"?"ms-done":st==="Active"?"ms-active":st==="Late"?"ms-late":"ms-plan";
+          const timing=rec.actual&&rec.plan?(daysBetween(rec.plan,rec.actual)===0?"On plan":daysBetween(rec.plan,rec.actual)>0?`Delay +${daysBetween(rec.plan,rec.actual)} hari`:`Ahead ${Math.abs(daysBetween(rec.plan,rec.actual))} hari`):"";
+          const updateBtn=canUpdate()?`<button class="ms-item-update" onclick="openMilestoneEditor('${c.id}','${m.key}')">Update</button>`:"";
+          return `<td><div class="ms"><span class="ms-dot ${cls}" title="${m.name}: ${st}"></span><b>${st}</b></div><span class="ms-date">Plan: ${fmtMSDate(new Date(rec.plan+"T00:00:00"))}${rec.actual?`<br>Actual: ${fmtMSDate(new Date(rec.actual+"T00:00:00"))}`:""}</span>${timing?`<small class="ms-timing">${timing}</small>`:""}${updateBtn}</td>`;
+        }).join('');
+        rows.push(`<tr class="milestone-child"><td class="project"><span class="ms-child-id"><span class="ms-child-line"></span>${c.id}</span></td><td><b>${c.siteA}</b> → <b>${c.siteB}</b></td><td><b>${Number(c.length||0).toFixed(1)} Km</b></td>${ccells}</tr>`);
+      });
+    }
+  });
+  document.getElementById('milestoneRows').innerHTML=rows.join('')||`<tr><td colspan="11" style="padding:0"><div class="empty-state"><b>${data.length?'Tidak ada data yang sesuai filter.':'Belum ada milestone karena belum ada Recovery Span.'}</b><span>${data.length?'Coba ubah filter.':'Submit / Upload span terlebih dahulu.'}</span></div></td></tr>`;
+}
+
+const adminMilestoneKeys = [
+  {key:"survey",name:"Survey / Assessment"},
+  {key:"boq",name:"Engineering / BoQ"},
+  {key:"material",name:"Material Ready"},
+  {key:"manpower",name:"Manpower Ready"},
+  {key:"execution",name:"Recovery Execution"},
+  {key:"testing",name:"Testing / OTDR"},
+  {key:"acceptance",name:"Acceptance / QE"},
+  {key:"closing",name:"Closing"}
+];
+
+let focusSpanId=null, focusMilestoneKey=null;
+function openMilestoneEditor(spanId,key){
+  if(!canUpdate()) return;
+  const x=data.find(v=>v.id===spanId), m=milestoneTemplate.find(v=>v.key===key); if(!x||!m)return;
+  const r=getMilestoneRecord(x,m); focusSpanId=spanId; focusMilestoneKey=key;
+  document.getElementById('focusName').value=m.name;
+  document.getElementById('focusSubtitle').textContent=`${x.id} • ${x.siteA} → ${x.siteB} • ${x.length.toFixed(1)} Km`;
+  document.getElementById('focusPlan').value=r.plan||''; document.getElementById('focusActual').value=r.actual||''; document.getElementById('focusStatus').value=r.status||'Plan';
+  refreshFocusTiming(); document.getElementById('milestoneFocus').classList.add('open');
+}
+function closeMilestoneEditor(){document.getElementById('milestoneFocus').classList.remove('open');focusSpanId=null;focusMilestoneKey=null;}
+function refreshFocusTiming(){
+  const plan=document.getElementById('focusPlan').value, actual=document.getElementById('focusActual').value, out=document.getElementById('focusTiming');
+  if(!plan){out.textContent='Plan date belum diisi';return;}
+  if(actual){const d=daysBetween(plan,actual);out.textContent=d>0?`Delay +${d} hari`:d<0?`Ahead ${Math.abs(d)} hari`:'On plan';}
+  else{const today=new Date();today.setHours(0,0,0,0);const d=Math.round((today-new Date(plan+'T00:00:00'))/86400000);out.textContent=d>0?`Overdue ${d} hari`:'Belum jatuh tempo';}
+}
+async function saveMilestoneFocus(){
+  if(!canUpdate())return; const x=data.find(v=>v.id===focusSpanId); if(!x)return;
+  let plan=document.getElementById('focusPlan').value, actual=document.getElementById('focusActual').value, status=document.getElementById('focusStatus').value;
+  if(status==='Done'&&!actual) actual=plan;
+  const old=getMilestoneRecord(x,focusMilestoneKey); x.milestones[focusMilestoneKey]={plan,actual,status};
+  const {error}=await supabase.from('span_milestones').upsert({span_id:x.id,milestone_key:focusMilestoneKey,plan_date:plan||null,actual_date:actual||null,status,updated_by:session.userId},{onConflict:'span_id,milestone_key'});
+  if(error){alert('Gagal menyimpan milestone: '+error.message);return;}
+  const mm=milestoneTemplate.find(v=>v.key===focusMilestoneKey); await auditLog(`Milestone ${mm.name} on ${x.id}: ${old.status} → ${status}; plan ${plan||'-'}; actual ${actual||'-'}`);
+  document.getElementById('lastUpdate').textContent='Data: milestone updated • '+new Date().toLocaleString('id-ID'); update(); closeMilestoneEditor();
+}
+document.getElementById('focusPlan').addEventListener('change',refreshFocusTiming);
+document.getElementById('focusActual').addEventListener('change',refreshFocusTiming);
+document.getElementById('focusStatus').addEventListener('change',refreshFocusTiming);
+
+function toggleAdmin(){ if(canUpdate()){ openEditor(document.getElementById('adminSpan').value || topLevelData()[0]?.id); } }
+let adminEditingId=null;
+function initAdmin(){
+  const sel=document.getElementById('adminSpan');
+  const old=sel.value;
+  const parents=topLevelData();
+  sel.innerHTML=parents.map(x=>`<option value="${escapeHtml(x.id)}">${escapeHtml(x.id)} (${spanRole(x)==='parent'?'Parent':'Standalone'}) — ${escapeHtml(x.siteA)} → ${escapeHtml(x.siteB)}</option>`).join('');
+  if(parents.some(x=>x.id===old)) sel.value=old;
+  loadAdminSpan();
+}
+function populateAdminParentSelect(currentId){
+  const el=document.getElementById('adminParentSelect'); if(!el)return;
+  const current=data.find(v=>v.id===currentId);
+  const parents=data.filter(v=>v.id!==currentId && !v.parentId);
+  el.innerHTML='<option value="">— Tidak ada Parent —</option>'+parents.map(v=>`<option value="${escapeHtml(v.id)}">${escapeHtml(v.id)} — ${escapeHtml(v.siteA)} → ${escapeHtml(v.siteB)}</option>`).join('');
+  el.value=current?.parentId||'';
+}
+function handleAdminRoleChange(){
+  const role=document.getElementById('adminRole')?.value; const p=document.getElementById('adminParentSelect');
+  if(p) p.disabled=role!=='child';
+  if(role!=='child' && p) p.value='';
+}
+function openEditor(id){
+  if(!canUpdate()){alert('Akses Viewer hanya dapat melihat dashboard.');return;}
+  const x=data.find(v=>v.id===id); if(!x)return;
+  const parent=x.parentId?data.find(v=>v.id===x.parentId):x;
+  const sel=document.getElementById('adminSpan');
+  if(parent) sel.value=parent.id;
+  adminEditingId=id;
+  document.getElementById('adminPanel').classList.add('open');
+  loadAdminSpan();
+  if(id!==parent.id) loadAdminChild(id);
+  renderAdminDocs(id);
+}
+function closeEditor(){document.getElementById('adminPanel').classList.remove('open');adminEditingId=null;}
+function adminParent(){ const pid=document.getElementById('adminSpan').value; return data.find(v=>v.id===pid); }
+function loadAdminSpan(){
+  const parent=adminParent(); if(!parent){document.getElementById('adminHierarchyInfo').innerHTML='<div class="admin-parent-note">Belum ada span. Gunakan <b>+ Submit / Upload Span</b> terlebih dahulu.</div>';return;}
+  const selected=adminEditingId && data.find(v=>v.id===adminEditingId);
+  const x=selected && (selected.id===parent.id || selected.parentId===parent.id) ? selected : parent;
+  adminEditingId=x.id;
+  const children=childrenOf(x.id), role=spanRole(x), isAggregated=role==='parent'&&children.length>0;
+  const agg=isAggregated?aggregateParent(x):x;
+  document.getElementById('adminHierarchyInfo').innerHTML=role==='parent'
+    ? `<div class="admin-parent-note"><b>${escapeHtml(x.id)} — Parent Span</b><br>${children.length} Child Span. Length, Recovered dan Progress Parent ${isAggregated?'dihitung otomatis dari seluruh Child Span.':'akan mengikuti data Parent sampai Child ditambahkan.'}</div>`
+    : role==='child'
+    ? `<div class="admin-parent-note"><b>${escapeHtml(x.id)} — Child Span</b><br>Parent: ${escapeHtml(x.parentId)}. Perubahan child akan otomatis mengubah summary Parent.</div>`
+    : `<div class="admin-parent-note"><b>${escapeHtml(x.id)} — Standalone / Unclassified</b><br>Span baru dari Submit / Upload. Anda dapat mengubahnya menjadi Parent atau Child.</div>`;
+  document.getElementById('adminRole').value=role;
+  populateAdminParentSelect(x.id);
+  document.getElementById('adminLength').value=agg.length||0;
+  document.getElementById('adminRecovered').value=agg.recovered||0;
+  document.getElementById('adminProgress').value=agg.progress||0;
+  document.getElementById('adminStatus').value=x.status||'On Track';
+  document.getElementById('adminPIC').value=x.mitra||'';
+  document.getElementById('adminRecoveryType').value=x.recoveryType||'';
+  document.getElementById('adminTarget').value=x.target||'';
+  document.getElementById('adminIssue').value=x.issue||'';
+  document.getElementById('adminLength').readOnly=isAggregated;
+  document.getElementById('adminRecovered').readOnly=isAggregated;
+  document.getElementById('adminProgress').readOnly=isAggregated;
+  document.getElementById('adminLength').classList.toggle('admin-readonly',isAggregated);
+  document.getElementById('adminRecovered').classList.toggle('admin-readonly',isAggregated);
+  document.getElementById('adminProgress').classList.toggle('admin-readonly',isAggregated);
+  document.getElementById('childSummary').textContent=children.length?`${children.length} child span dalam ${x.id}`:'Belum ada Child Span pada span ini.';
+  renderAdminChildRows(x.id); renderAdminDocs(x.id); handleAdminRoleChange();
+}
+function renderAdminChildRows(parentId){
+  const rows=document.getElementById('adminChildRows'); if(!rows)return;
+  const ch=childrenOf(parentId);
+  rows.innerHTML=ch.length?ch.map(c=>`<tr><td><b class="project">${escapeHtml(c.id)}</b></td><td>${escapeHtml(c.siteA)} → ${escapeHtml(c.siteB)}</td><td>${Number(c.length||0).toFixed(1)} Km</td><td>${Number(c.recovered||0).toFixed(1)} Km</td><td><b>${Number(c.progress||0)}%</b></td><td><span class="pill ${statusClass(c.status)}">${escapeHtml(c.status)}</span></td><td>${c.target||'—'}</td><td>${escapeHtml(c.mitra||'—')}</td><td><button class="child-admin-edit" onclick="loadAdminChild('${c.id}')">Edit</button></td></tr>`).join(''):'<tr><td colspan="9" class="child-admin-empty">Tidak ada Child Span. Span ini masih standalone / parent tanpa child.</td></tr>';
+}
+function loadAdminChild(id){
+  const c=data.find(v=>v.id===id); if(!c||!c.parentId)return;
+  adminEditingId=id; document.getElementById('adminSpan').value=c.parentId;
+  loadAdminSpan();
+  adminEditingId=id;
+  document.getElementById('adminRole').value='child';
+  populateAdminParentSelect(id); document.getElementById('adminParentSelect').value=c.parentId;
+  document.getElementById('adminLength').value=c.length||0; document.getElementById('adminRecovered').value=c.recovered||0; document.getElementById('adminProgress').value=c.progress||0;
+  document.getElementById('adminStatus').value=c.status||'On Track'; document.getElementById('adminPIC').value=c.mitra||''; document.getElementById('adminRecoveryType').value=c.recoveryType||''; document.getElementById('adminTarget').value=c.target||''; document.getElementById('adminIssue').value=c.issue||'';
+  document.getElementById('adminLength').readOnly=false; document.getElementById('adminRecovered').readOnly=false; document.getElementById('adminProgress').readOnly=false;
+  document.getElementById('adminLength').classList.remove('admin-readonly'); document.getElementById('adminRecovered').classList.remove('admin-readonly'); document.getElementById('adminProgress').classList.remove('admin-readonly');
+  document.getElementById('adminHierarchyInfo').innerHTML=`<div class="admin-parent-note"><b>${escapeHtml(c.id)} — Child Span</b><br>Parent: ${escapeHtml(c.parentId)}. Update dilakukan khusus untuk child ini.</div>`;
+  document.getElementById('childSummary').textContent=`Editing ${c.id} • ${c.siteA} → ${c.siteB}`; renderAdminChildRows(c.parentId); renderAdminDocs(id); handleAdminRoleChange();
+}
+async function saveAdminSpan(){
+  if(!canUpdate()){alert('Akses ditolak.');return;}
+  const id=adminEditingId || document.getElementById('adminSpan').value; const x=data.find(v=>v.id===id); if(!x)return;
+  const role=document.getElementById('adminRole').value; const newParentId=document.getElementById('adminParentSelect').value||null; const oldParentId=x.parentId||null; const existingChildren=childrenOf(id);
+  if(role==='child' && existingChildren.length){alert('Span ini masih memiliki Child Span. Lepaskan/pindahkan Child terlebih dahulu sebelum menjadikannya Child.');return;}
+  if(role==='child' && (!newParentId || newParentId===id)){alert('Untuk kategori Child, pilih Parent Span yang valid.');return;}
+  if(role==='child'){ x.parentId=newParentId; x.spanRole='child'; } else { delete x.parentId; x.spanRole=role; }
+  const oldParent=oldParentId?data.find(v=>v.id===oldParentId):null;
+  const children=childrenOf(x.id); const isAggregated=role==='parent'&&children.length>0;
+  if(isAggregated){ const a=aggregateParent(x); x.length=a.length; x.recovered=a.recovered; x.progress=a.progress; }
+  else { x.length=Math.max(0,Number(document.getElementById('adminLength').value)||0); x.recovered=Math.min(x.length,Math.max(0,Number(document.getElementById('adminRecovered').value)||0)); x.progress=Math.min(100,Math.max(0,Number(document.getElementById('adminProgress').value)||0)); }
+  x.status=document.getElementById('adminStatus').value; x.mitra=document.getElementById('adminPIC').value; x.recoveryType=document.getElementById('adminRecoveryType').value; x.target=document.getElementById('adminTarget').value||null; x.issue=document.getElementById('adminIssue').value;
+  if(oldParent && oldParent.id!==newParentId){const oldChildren=childrenOf(oldParent.id); if(oldChildren.length){const a=aggregateParent(oldParent); oldParent.length=a.length;oldParent.recovered=a.recovered;oldParent.progress=a.progress;} else {oldParent.spanRole='standalone';}}
+  if(newParentId){const p=data.find(v=>v.id===newParentId); if(p){p.spanRole='parent'; const a=aggregateParent(p); p.length=a.length;p.recovered=a.recovered;p.progress=a.progress;}}
+  const payload={parent_id:x.parentId||null,span_role:x.spanRole,site_a:x.siteA,site_b:x.siteB,region:x.region,length_km:x.length,recovered_km:x.recovered,progress_pct:x.progress,recovery_type:x.recoveryType||null,target_date:x.target||null,status:x.status,quality:x.quality||'Green',issue_root_cause:x.issue||null,mitra_subcont:x.mitra||null,lat:x.lat??null,lng:x.lng??null,lat2:x.lat2??null,lng2:x.lng2??null,updated_by:session.userId};
+  let {error}=await supabase.from('recovery_spans').update(payload).eq('id',id); if(error){alert('Gagal menyimpan span: '+error.message);return;}
+  for(const p of [oldParent,newParentId?data.find(v=>v.id===newParentId):null]){if(p&&p.id!==id){const a=aggregateParent(p);const res=await supabase.from('recovery_spans').update({span_role:'parent',length_km:a.length,recovered_km:a.recovered,progress_pct:a.progress,updated_by:session.userId}).eq('id',p.id);if(res.error){console.warn(res.error.message)}}}
+  await auditLog(`Update ${role} ${id} — Parent ${newParentId||'-'}`); document.getElementById('lastUpdate').textContent='Data: updated • '+new Date().toLocaleString('id-ID'); await loadStoredData(); initAdmin(); populateGlobalMitraFilter(); update(); openEditor(x.id); alert('Update span berhasil disimpan.');
+}
+
+async function loadStoredData(){
+  if(!data.length) data=sampleProjects.map(x=>JSON.parse(JSON.stringify(x)));
+  setDbStatus('Demo Mode • local data',true);
+  document.getElementById('lastUpdate').textContent='Data: '+data.length+' sample span';
+}
+
+function resetData(){alert('Sample data dinonaktifkan pada versi Supabase. Gunakan + Submit / Upload Span untuk memasukkan data recovery.');}
+function openSubmitModal(){if(!canUpdate()){alert('Akses Viewer hanya dapat melihat dashboard.');return;} document.getElementById('submitModal').classList.add('open'); document.getElementById('submitRows').innerHTML='<tr><td colspan="6" class="child-admin-empty">Belum ada span yang akan disubmit.</td></tr>'; submitBuffer=[];}
+function closeSubmitModal(){document.getElementById('submitModal').classList.remove('open');}
+let submitBuffer=[];
+function addSubmitRow(){
+  const siteA=document.getElementById('submitSiteA').value.trim(),siteB=document.getElementById('submitSiteB').value.trim(),region=document.getElementById('submitRegion').value.trim(),length=Number(document.getElementById('submitLength').value);
+  if(!siteA||!siteB||!region||!Number.isFinite(length)||length<=0){alert('Lengkapi Site A, Site B, Region dan Length yang valid.');return;}
+  submitBuffer.push({siteA,siteB,region,length});
+  ['submitSiteA','submitSiteB','submitRegion','submitLength'].forEach(id=>document.getElementById(id).value=''); renderSubmitRows();
+}
+function renderSubmitRows(){
+  const el=document.getElementById('submitRows');
+  el.innerHTML=submitBuffer.length?submitBuffer.map((r,i)=>`<tr><td>${i+1}</td><td>${escapeHtml(r.siteA)}</td><td>${escapeHtml(r.siteB)}</td><td>${escapeHtml(r.region)}</td><td><b>${r.length.toFixed(1)}</b> Km</td><td><button class="submit-remove" onclick="removeSubmitRow(${i})">Hapus</button></td></tr>`).join(''):'<tr><td colspan="6" class="child-admin-empty">Belum ada span yang akan disubmit.</td></tr>';
+}
+function removeSubmitRow(i){submitBuffer.splice(i,1);renderSubmitRows();}
+function nextSpanId(){let n=1;const ids=new Set(data.map(x=>x.id));while(ids.has(`SP-${String(n).padStart(3,'0')}`))n++;return `SP-${String(n).padStart(3,'0')}`;}
+async function submitSpanBatch(){
+  if(!canUpdate())return; if(!submitBuffer.length){alert('Tambahkan minimal 1 span.');return;}
+  const rows=submitBuffer.map(r=>({id:nextSpanId(),site_a:r.siteA,site_b:r.siteB,region:r.region,length_km:r.length,recovered_km:0,progress_pct:0,recovery_type:null,target_date:null,status:'On Track',quality:'Green',issue_root_cause:null,mitra_subcont:null,span_role:'standalone',created_by:session.userId,updated_by:session.userId}));
+  const {error}=await supabase.from('recovery_spans').insert(rows); if(error){alert('Gagal submit span: '+error.message);return;}
+  await auditLog(`Submit ${rows.length} Recovery Span`); await loadStoredData(); document.getElementById('lastUpdate').textContent='Data: '+rows.length+' span submitted'; populateGlobalMitraFilter(); initAdmin(); update(); closeSubmitModal(); alert('Span berhasil disubmit. Selanjutnya lakukan klasifikasi Parent / Child melalui Update.');
+}
+function parseCSVLine(line){const out=[];let cur='',q=false;for(let i=0;i<line.length;i++){const c=line[i];if(c==='"'){if(q&&line[i+1]==='"'){cur+='"';i++;}else q=!q;}else if(c===','&&!q){out.push(cur.trim());cur='';}else cur+=c;}out.push(cur.trim());return out;}
+function handleSpanCSV(file){
+  if(!file)return; const reader=new FileReader(); reader.onload=()=>{try{const lines=reader.result.replace(/^\uFEFF/,'').split(/\r?\n/).filter(Boolean);if(lines.length<2)throw Error('CSV kosong');const headers=parseCSVLine(lines[0]).map(h=>h.toLowerCase().trim());const find=(names)=>{const i=headers.findIndex(h=>names.includes(h));return i;};const ia=find(['site a','site_a','sitea']),ib=find(['site b','site_b','siteb']),ir=find(['region']),il=find(['length','length (km)','length km']);if([ia,ib,ir,il].some(i=>i<0))throw Error('Header tidak sesuai');let added=0;lines.slice(1).forEach(line=>{const c=parseCSVLine(line);const siteA=c[ia],siteB=c[ib],region=c[ir],length=Number(c[il]);if(siteA&&siteB&&region&&Number.isFinite(length)&&length>0){submitBuffer.push({siteA,siteB,region,length});added++;}});renderSubmitRows();alert(`${added} span berhasil dibaca dari CSV. Klik Submit Span untuk menyimpan.`);}catch(e){alert('CSV tidak valid. Gunakan header: Site A, Site B, Region, Length');}};reader.readAsText(file);
+}
+function downloadSpanTemplate(){const csv='Site A,Site B,Region,Length\nBDG-001,BDG-014,Jawa Barat,12.6\nBDG-014,BDG-027,Jawa Barat,8.4\n';const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));a.download='template_submit_recovery_span.csv';a.click();}
+
+</script>
+</body>
+</html>
