@@ -6,7 +6,6 @@
 <title>Project Recovery Monitoring Dashboard</title>
 <link rel="preconnect" href="https://cdn.jsdelivr.net">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css">
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
@@ -99,7 +98,7 @@ select,input{border:1px solid #ccd6de;border-radius:6px;padding:8px 9px;backgrou
     <h2>Login Dashboard</h2>
     <p>Silakan login sesuai hak akses. Viewer hanya dapat melihat monitoring; Updater dapat melakukan update progress span dan milestone.</p>
     <form onsubmit="login(event)">
-      <div class="login-field"><label>Email</label><input id="loginUser" type="email" autocomplete="email" placeholder="nama@perusahaan.com" required></div>
+      <div class="login-field"><label>Username</label><input id="loginUser" type="text" autocomplete="username" placeholder="viewer / operator" required></div>
       <div class="login-field"><label>Password</label><input id="loginPass" type="password" autocomplete="current-password" required></div>
       <div class="login-error" id="loginError">
 <div id="loginDiagnostic" class="login-diagnostic">
@@ -113,7 +112,7 @@ select,input{border:1px solid #ccd6de;border-radius:6px;padding:8px 9px;backgrou
 </div></div>
       <button class="login-submit" type="submit">Masuk ke Dashboard</button>
     </form>
-    <div class="demo-note"><b>Supabase Auth</b><br>Login menggunakan email/password dari Supabase Auth. Hak akses Viewer / Updater diatur pada tabel <b>profiles</b>.</div>
+    <div class="demo-note"><b>Local Demo Login</b><br>Login menggunakan email/password dari Local Demo Login. Hak akses Viewer / Updater diatur pada tabel <b>profiles</b>.</div>
   </div>
 </div>
 <header class="topbar">
@@ -341,24 +340,14 @@ select,input{border:1px solid #ccd6de;border-radius:6px;padding:8px 9px;backgrou
   <div class="card"><h3 class="card-title">Recovery Length by Span</h3><div class="chartbox"><canvas id="budgetChart"></canvas></div><div class="legend"><span><i style="background:#f28b24"></i>Budget</span><span><i style="background:#399bd0"></i>Forecast</span><span><i style="background:#53b56d"></i>Paid</span></div></div>
   <div class="card"><h3 class="card-title">Recovery Progress Trend</h3><div class="chartbox"><canvas id="cashChart"></canvas></div></div>
 </section>
-<div class="footer">Demo Mode • Dashboard fokus pada analisis, filter, milestone, parent/child dan workflow. Supabase dapat diaktifkan kembali setelah desain dashboard final.</div>
+<div class="footer">Local Demo Mode • Login, update, milestone, parent/child, submit span dan dokumen berjalan lokal di browser. Supabase akan diaktifkan kembali setelah dashboard final.</div>
 </main>
 
 <script>
 // Ganti dua nilai berikut dengan Project URL dan Publishable Key dari Supabase. Jangan gunakan service_role key di browser.
-const SUPABASE_URL = 'https://eixehtqgwlztnwygqlsw.supabase.co';
-const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_wLF9Kam9cxVEbVsXkRg3KA_9ccGRjrZ';
-const SUPABASE_READY = SUPABASE_URL.startsWith('https://') && !SUPABASE_URL.includes('YOUR_') && !SUPABASE_PUBLISHABLE_KEY.includes('YOUR_');
-const { createClient } = window.supabase;
-const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, { auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true} });
+const DEMO_MODE = true;
 let session = null;
 function setDbStatus(text,ok=false){const el=document.getElementById('dbStatus');if(el){el.textContent=text;el.style.background=ok?'#e5f5e9':'#fff2d9';el.style.color=ok?'#258344':'#9b680b';}}
-async function fetchRole(user){
-  const {data:profile,error}=await supabase.from('profiles').select('role,display_name').eq('id',user.id).single();
-  if(error) throw error;
-  const role=profile?.role==='updater'?'Updater':'Viewer';
-  return {username:profile?.display_name||user.email, email:user.email, role, canUpdate:role==='Updater', userId:user.id};
-}
 function login(e){
   e.preventDefault();
   const username=document.getElementById('loginUser').value.trim().toLowerCase();
@@ -370,13 +359,16 @@ function login(e){
     operator:{password:'operator123',username:'Operator Recovery',role:'Updater',canUpdate:true}
   };
   const acc=accounts[username];
-  if(!acc || acc.password!==password){errorEl.textContent='Username atau password salah.';return;}
+  if(!acc || acc.password!==password){
+    errorEl.textContent='Username atau password salah. Gunakan viewer/viewer123 atau operator/operator123.';
+    return;
+  }
   session={username:acc.username,email:username+'@local',role:acc.role,canUpdate:acc.canUpdate,userId:'local-'+username};
   localStorage.setItem('fiberRecoveryDemoSession',JSON.stringify(session));
   applySession();
   data=sampleProjects.map(x=>JSON.parse(JSON.stringify(x)));
   populateGlobalMitraFilter(); initAdmin(); update();
-  setDbStatus('Demo Mode • local data',true);
+  setDbStatus('Local Demo Mode • data tersimpan di browser',true);
 }
 
 function applySession(){
@@ -390,9 +382,7 @@ function logout(){localStorage.removeItem('fiberRecoveryDemoSession');session=nu
 function canUpdate(){return !!session && session.canUpdate;}
 function closeEditor(){document.getElementById('adminPanel').classList.remove('open');}
 async function auditLog(message){
-  if(!session?.userId)return;
-  const {error}=await supabase.from('audit_logs').insert({user_id:session.userId,message});
-  if(error) console.warn('Audit log:',error.message);
+  console.log('[LOCAL AUDIT]', new Date().toISOString(), message);
 }
 
 const sampleProjects = [
@@ -420,22 +410,58 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'�
 L.control.zoom({position:'bottomright'}).addTo(map);
 
 
+const LOCAL_DOCS_KEY='fiberRecoveryLocalDocs';
+function getLocalDocs(){
+  try{return JSON.parse(localStorage.getItem(LOCAL_DOCS_KEY)||'{}')}catch(e){return {}}
+}
+function setLocalDocs(v){localStorage.setItem(LOCAL_DOCS_KEY,JSON.stringify(v));}
 async function saveDocFile(spanId,file){
-  const path=`${spanId}/${crypto.randomUUID()}-${file.name.replace(/[^a-zA-Z0-9._-]/g,'_')}`;
-  const {error}=await supabase.storage.from('span-documents').upload(path,file,{upsert:false,contentType:file.type||'application/octet-stream'});
-  if(error) throw error; return {id:path,name:file.name,type:file.type||'application/octet-stream',size:file.size,path};
+  const id=`${spanId}/${Date.now()}-${file.name}`;
+  const docs=getLocalDocs();
+  docs[id]={id,name:file.name,type:file.type||'application/octet-stream',size:file.size,data:null};
+  setLocalDocs(docs);
+  return docs[id];
 }
 async function listDocFiles(spanId){
-  const {data,error}=await supabase.storage.from('span-documents').list(spanId,{limit:100,sortBy:{column:'created_at',order:'desc'}});
-  if(error) throw error;
-  return (data||[]).map(f=>({id:`${spanId}/${f.name}`,name:f.name.replace(/^.*?-/,''),path:`${spanId}/${f.name}`}));
+  const docs=getLocalDocs();
+  return Object.values(docs).filter(f=>f.id.startsWith(spanId+'/'));
 }
-async function deleteDocFile(path){const {error}=await supabase.storage.from('span-documents').remove([path]);if(error)throw error;}
-async function downloadDoc(path){const {data,error}=await supabase.storage.from('span-documents').download(path);if(error)throw error;const url=URL.createObjectURL(data);const a=document.createElement('a');a.href=url;a.download=path.split('/').pop().replace(/^.*?-/,'');a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)}
-async function renderAdminDocs(spanId){const el=document.getElementById('adminDocs');if(!el)return;try{const files=await listDocFiles(spanId);el.innerHTML=files.length?files.map(f=>`<span class="doc-chip"><a href="#" onclick="downloadDoc('${f.path}');return false">${escapeHtml(f.name)}</a><a href="#" title="Hapus" onclick="removeDoc('${f.path}','${spanId}');return false" style="color:#c33">×</a></span>`).join(''):'<span class="doc-empty">Belum ada dokumen</span>'}catch(e){el.innerHTML='<span class="doc-empty">Storage belum siap</span>';}}
-async function removeDoc(path,spanId){if(!canUpdate())return;if(!confirm('Hapus dokumen ini?'))return;try{await deleteDocFile(path);await auditLog(`Delete document on ${spanId}`);await renderAdminDocs(spanId);await renderTableDocs()}catch(e){alert('Gagal menghapus dokumen: '+e.message)}}
-async function uploadDocs(spanId,files){try{for(const f of files){await saveDocFile(spanId,f);await auditLog(`Upload document ${f.name} on ${spanId}`)}await renderAdminDocs(spanId);await renderTableDocs()}catch(e){alert('Gagal upload dokumen: '+e.message)}}
-async function renderTableDocs(){const cells=document.querySelectorAll('.docs-cell[data-span]');for(const c of cells){try{const files=await listDocFiles(c.dataset.span);const links=files.map(f=>`<a class="doc-chip" href="#" onclick="downloadDoc('${f.path}');return false">${escapeHtml(f.name)}</a>`).join('');const upload=canUpdate()?`<label class="doc-upload">+ Upload<input type="file" multiple accept=".xlsx,.xls,.csv,.pdf,.kmz,.kml,.doc,.docx,.zip" onchange="uploadDocs('${c.dataset.span}',this.files);this.value=''">`:' ';c.innerHTML=`<div class="doc-list">${links}${upload}</div>${files.length?'':'<span class="doc-empty">No document</span>'}`}catch(e){c.innerHTML='<span class="doc-empty">Storage belum siap</span>'}}}
+async function deleteDocFile(path){
+  const docs=getLocalDocs(); delete docs[path]; setLocalDocs(docs);
+}
+async function downloadDoc(path){
+  const docs=getLocalDocs(), f=docs[path];
+  if(!f){alert('Dokumen tidak ditemukan di local browser.');return;}
+  alert(`Dokumen "${f.name}" tersimpan sebagai metadata lokal pada Demo Mode. Untuk file asli gunakan Supabase Storage pada versi production.`);
+}
+async function renderAdminDocs(spanId){
+  const el=document.getElementById('adminDocs');if(!el)return;
+  const files=await listDocFiles(spanId);
+  el.innerHTML=files.length?files.map(f=>`<span class="doc-chip"><a href="#" onclick="downloadDoc('${f.id}');return false">${escapeHtml(f.name)}</a><a href="#" title="Hapus" onclick="removeDoc('${f.id}','${spanId}');return false" style="color:#c33">×</a></span>`).join(''):'<span class="doc-empty">Belum ada dokumen</span>';
+}
+async function removeDoc(path,spanId){
+  if(!canUpdate())return;
+  if(!confirm('Hapus dokumen ini?'))return;
+  await deleteDocFile(path); await auditLog(`Delete document on ${spanId}`);
+  await renderAdminDocs(spanId); await renderTableDocs();
+}
+async function uploadDocs(spanId,files){
+  try{
+    for(const f of files){await saveDocFile(spanId,f);await auditLog(`Upload document ${f.name} on ${spanId}`)}
+    await renderAdminDocs(spanId); await renderTableDocs();
+  }catch(e){alert('Gagal upload dokumen: '+e.message)}
+}
+async function renderTableDocs(){
+  const cells=document.querySelectorAll('.docs-cell[data-span]');
+  for(const c of cells){
+    try{
+      const files=await listDocFiles(c.dataset.span);
+      const links=files.map(f=>`<a class="doc-chip" href="#" onclick="downloadDoc('${f.id}');return false">${escapeHtml(f.name)}</a>`).join('');
+      const upload=canUpdate()?`<label class="doc-upload">+ Upload<input type="file" multiple accept=".xlsx,.xls,.csv,.pdf,.kmz,.kml,.doc,.docx,.zip" onchange="uploadDocs('${c.dataset.span}',this.files);this.value=''">`:' ';
+      c.innerHTML=`<div class="doc-list">${links}${upload}</div>${files.length?'':'<span class="doc-empty">No document</span>'}`
+    }catch(e){c.innerHTML='<span class="doc-empty">Local document storage unavailable</span>'}
+  }
+}
 
 const expandedParents=new Set();
 function childrenOf(id){return data.filter(x=>x.parentId===id);}
@@ -711,10 +737,10 @@ async function saveMilestoneFocus(){
   let plan=document.getElementById('focusPlan').value, actual=document.getElementById('focusActual').value, status=document.getElementById('focusStatus').value;
   if(status==='Done'&&!actual) actual=plan;
   const old=getMilestoneRecord(x,focusMilestoneKey); x.milestones[focusMilestoneKey]={plan,actual,status};
-  const {error}=await supabase.from('span_milestones').upsert({span_id:x.id,milestone_key:focusMilestoneKey,plan_date:plan||null,actual_date:actual||null,status,updated_by:session.userId},{onConflict:'span_id,milestone_key'});
-  if(error){alert('Gagal menyimpan milestone: '+error.message);return;}
-  const mm=milestoneTemplate.find(v=>v.key===focusMilestoneKey); await auditLog(`Milestone ${mm.name} on ${x.id}: ${old.status} → ${status}; plan ${plan||'-'}; actual ${actual||'-'}`);
-  document.getElementById('lastUpdate').textContent='Data: milestone updated • '+new Date().toLocaleString('id-ID'); update(); closeMilestoneEditor();
+  const mm=milestoneTemplate.find(v=>v.key===focusMilestoneKey);
+  await auditLog(`Milestone ${mm.name} on ${x.id}: ${old.status} → ${status}; plan ${plan||'-'}; actual ${actual||'-'}`);
+  document.getElementById('lastUpdate').textContent='Local data: milestone updated • '+new Date().toLocaleString('id-ID');
+  update(); closeMilestoneEditor();
 }
 document.getElementById('focusPlan').addEventListener('change',refreshFocusTiming);
 document.getElementById('focusActual').addEventListener('change',refreshFocusTiming);
@@ -820,16 +846,22 @@ async function saveAdminSpan(){
   x.status=document.getElementById('adminStatus').value; x.mitra=document.getElementById('adminPIC').value; x.recoveryType=document.getElementById('adminRecoveryType').value; x.target=document.getElementById('adminTarget').value||null; x.issue=document.getElementById('adminIssue').value;
   if(oldParent && oldParent.id!==newParentId){const oldChildren=childrenOf(oldParent.id); if(oldChildren.length){const a=aggregateParent(oldParent); oldParent.length=a.length;oldParent.recovered=a.recovered;oldParent.progress=a.progress;} else {oldParent.spanRole='standalone';}}
   if(newParentId){const p=data.find(v=>v.id===newParentId); if(p){p.spanRole='parent'; const a=aggregateParent(p); p.length=a.length;p.recovered=a.recovered;p.progress=a.progress;}}
-  const payload={parent_id:x.parentId||null,span_role:x.spanRole,site_a:x.siteA,site_b:x.siteB,region:x.region,length_km:x.length,recovered_km:x.recovered,progress_pct:x.progress,recovery_type:x.recoveryType||null,target_date:x.target||null,status:x.status,quality:x.quality||'Green',issue_root_cause:x.issue||null,mitra_subcont:x.mitra||null,lat:x.lat??null,lng:x.lng??null,lat2:x.lat2??null,lng2:x.lng2??null,updated_by:session.userId};
-  let {error}=await supabase.from('recovery_spans').update(payload).eq('id',id); if(error){alert('Gagal menyimpan span: '+error.message);return;}
-  for(const p of [oldParent,newParentId?data.find(v=>v.id===newParentId):null]){if(p&&p.id!==id){const a=aggregateParent(p);const res=await supabase.from('recovery_spans').update({span_role:'parent',length_km:a.length,recovered_km:a.recovered,progress_pct:a.progress,updated_by:session.userId}).eq('id',p.id);if(res.error){console.warn(res.error.message)}}}
-  await auditLog(`Update ${role} ${id} — Parent ${newParentId||'-'}`); document.getElementById('lastUpdate').textContent='Data: updated • '+new Date().toLocaleString('id-ID'); await loadStoredData(); initAdmin(); populateGlobalMitraFilter(); update(); openEditor(x.id); alert('Update span berhasil disimpan.');
+  await auditLog(`Update ${role} ${id} — Parent ${newParentId||'-'}`);
+  localStorage.setItem('fiberRecoveryDemoData',JSON.stringify(data));
+  document.getElementById('lastUpdate').textContent='Local data: updated • '+new Date().toLocaleString('id-ID');
+  initAdmin(); populateGlobalMitraFilter(); update(); openEditor(x.id);
+  alert('Update span berhasil disimpan di Local Demo Mode.');
 }
 
 async function loadStoredData(){
-  if(!data.length) data=sampleProjects.map(x=>JSON.parse(JSON.stringify(x)));
-  setDbStatus('Demo Mode • local data',true);
-  document.getElementById('lastUpdate').textContent='Data: '+data.length+' sample span';
+  try{
+    const saved=localStorage.getItem('fiberRecoveryDemoData');
+    data=saved?JSON.parse(saved):sampleProjects.map(x=>JSON.parse(JSON.stringify(x)));
+  }catch(e){
+    data=sampleProjects.map(x=>JSON.parse(JSON.stringify(x)));
+  }
+  setDbStatus('Local Demo Mode • data tersimpan di browser',true);
+  document.getElementById('lastUpdate').textContent='Data: '+data.length+' local span';
 }
 
 function resetData(){alert('Sample data dinonaktifkan pada versi Supabase. Gunakan + Submit / Upload Span untuk memasukkan data recovery.');}
@@ -849,10 +881,21 @@ function renderSubmitRows(){
 function removeSubmitRow(i){submitBuffer.splice(i,1);renderSubmitRows();}
 function nextSpanId(){let n=1;const ids=new Set(data.map(x=>x.id));while(ids.has(`SP-${String(n).padStart(3,'0')}`))n++;return `SP-${String(n).padStart(3,'0')}`;}
 async function submitSpanBatch(){
-  if(!canUpdate())return; if(!submitBuffer.length){alert('Tambahkan minimal 1 span.');return;}
-  const rows=submitBuffer.map(r=>({id:nextSpanId(),site_a:r.siteA,site_b:r.siteB,region:r.region,length_km:r.length,recovered_km:0,progress_pct:0,recovery_type:null,target_date:null,status:'On Track',quality:'Green',issue_root_cause:null,mitra_subcont:null,span_role:'standalone',created_by:session.userId,updated_by:session.userId}));
-  const {error}=await supabase.from('recovery_spans').insert(rows); if(error){alert('Gagal submit span: '+error.message);return;}
-  await auditLog(`Submit ${rows.length} Recovery Span`); await loadStoredData(); document.getElementById('lastUpdate').textContent='Data: '+rows.length+' span submitted'; populateGlobalMitraFilter(); initAdmin(); update(); closeSubmitModal(); alert('Span berhasil disubmit. Selanjutnya lakukan klasifikasi Parent / Child melalui Update.');
+  if(!canUpdate())return;
+  if(!submitBuffer.length){alert('Tambahkan minimal 1 span.');return;}
+  const rows=submitBuffer.map(r=>({
+    id:nextSpanId(),siteA:r.siteA,siteB:r.siteB,region:r.region,length:r.length,
+    recovered:0,progress:0,recoveryType:'',target:null,status:'On Track',quality:'Green',
+    issue:'',mitra:'',spanRole:'standalone',parentId:null,milestones:{},
+    lat:null,lng:null,lat2:null,lng2:null
+  }));
+  data.push(...rows);
+  localStorage.setItem('fiberRecoveryDemoData',JSON.stringify(data));
+  await auditLog(`Submit ${rows.length} Recovery Span`);
+  document.getElementById('lastUpdate').textContent='Local data: '+rows.length+' span submitted';
+  populateGlobalMitraFilter(); initAdmin(); update(); closeSubmitModal();
+  submitBuffer=[];
+  alert('Span berhasil disubmit ke Local Demo Mode. Selanjutnya lakukan klasifikasi Parent / Child melalui Update.');
 }
 function parseCSVLine(line){const out=[];let cur='',q=false;for(let i=0;i<line.length;i++){const c=line[i];if(c==='"'){if(q&&line[i+1]==='"'){cur+='"';i++;}else q=!q;}else if(c===','&&!q){out.push(cur.trim());cur='';}else cur+=c;}out.push(cur.trim());return out;}
 function handleSpanCSV(file){
