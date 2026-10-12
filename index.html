@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="app-version" content="V32-TRUE-LIVE-SUPABASE">
 <title>Project Recovery Monitoring Dashboard</title>
 <link rel="preconnect" href="https://cdn.jsdelivr.net">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css">
@@ -430,6 +431,15 @@ select,input{border:1px solid #ccd6de;border-radius:6px;padding:8px 9px;backgrou
   .v30-steps{transform:scale(.86);transform-origin:center}
   .v30-footer{padding:12px 15px}
 }
+
+/* V33 — User & Mitra Management */
+.v33-user-modal{position:fixed;inset:0;background:rgba(20,31,43,.52);z-index:1200;display:none;align-items:center;justify-content:center;padding:20px}
+.v33-user-box{width:min(980px,96vw);max-height:90vh;overflow:auto;background:#fff;border-radius:16px;box-shadow:0 20px 70px rgba(0,0,0,.24)}
+.v33-user-head{display:flex;justify-content:space-between;align-items:center;padding:18px 20px;border-bottom:1px solid #e7ebef}
+.v33-user-head h3{margin:0;color:#243447;font-size:18px}.v33-user-head p{margin:4px 0 0;color:#748292;font-size:12px}
+.v33-user-body{padding:18px 20px}.v33-user-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.v33-user-field label{display:block;font-size:11px;font-weight:800;color:#5e6d7c;margin-bottom:5px}.v33-user-field input,.v33-user-field select{width:100%;padding:10px;border:1px solid #d9e0e7;border-radius:9px;background:#fff}.v33-user-field.full{grid-column:1/-1}
+.v33-user-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:12px}.v33-user-table{width:100%;border-collapse:collapse;margin-top:18px;font-size:12px}.v33-user-table th{background:#f4f7fa;color:#5d6b78;text-align:left;padding:9px;border-bottom:1px solid #dfe5ea}.v33-user-table td{padding:9px;border-bottom:1px solid #edf0f3;vertical-align:middle}.v33-role-chip{display:inline-flex;padding:4px 8px;border-radius:999px;background:#eef4ff;color:#365f98;font-weight:800;font-size:10px}.v33-mitra-chip{display:inline-flex;padding:4px 8px;border-radius:999px;background:#edf8f1;color:#26734a;font-weight:800;font-size:10px}.v33-msg{margin-top:10px;padding:9px 11px;border-radius:9px;font-size:12px;display:none}.v33-msg.ok{display:block;background:#eaf7ee;color:#237342}.v33-msg.err{display:block;background:#fff0f0;color:#a33b3b}.v33-note{padding:10px 12px;background:#f7f9fb;border:1px solid #e4e9ee;border-radius:10px;color:#687785;font-size:11px;margin-bottom:12px}
+@media(max-width:700px){.v33-user-grid{grid-template-columns:1fr}.v33-user-field.full{grid-column:auto}}
 </style>
 
 </head>
@@ -438,7 +448,7 @@ select,input{border:1px solid #ccd6de;border-radius:6px;padding:8px 9px;backgrou
   <div class="login-box">
     <div class="login-logo">FIBER RECOVERY CONTROL TOWER</div>
     <h2>Login Dashboard</h2>
-    <p>Silakan login sesuai hak akses. Viewer hanya dapat melihat monitoring; Updater dapat melakukan update progress span dan milestone.</p>
+    <p>Login menggunakan akun Supabase. Hak akses (Super User, Mitra Admin, Updater, Viewer) dibaca dari profile database.</p>
     <form id="localAccessForm" onsubmit="return login(event)">
       <div class="login-field"><label>Email Access</label><input id="loginUser" type="email" autocomplete="email" placeholder="nama@perusahaan.com" required></div>
       <div class="login-field"><label>Password</label><input id="loginPass" type="password" autocomplete="current-password" placeholder="Password akun Anda" required></div>
@@ -467,6 +477,7 @@ select,input{border:1px solid #ccd6de;border-radius:6px;padding:8px 9px;backgrou
     <span class="session"><span id="sessionUser"></span><span class="role-badge" id="sessionRole"></span></span>
     <button class="btn-light" onclick="downloadCSV()">Export Excel/CSV</button>
     <button type="button" class="btn btn-primary" id="v22GenerateSpanBtn" onclick="smartOpenUpload()">⬆ Upload Data</button>
+    <button type="button" class="btn-light" id="v33UserMgmtBtn" onclick="openUserMitraManagement()" style="display:none">👥 User &amp; Mitra</button>
     
     <button class="btn-light" onclick="logout()">Logout</button>
   </div>
@@ -482,6 +493,28 @@ select,input{border:1px solid #ccd6de;border-radius:6px;padding:8px 9px;backgrou
   <div style="margin-left:auto;display:flex;gap:6px;align-items:center;flex-wrap:wrap"><span class="badge" id="dbStatus">Supabase: connecting...</span><span class="badge" id="lastUpdate">Data: empty • belum ada span recovery</span></div>
 </section>
 
+
+<section class="v33-user-modal" id="userMitraModal">
+  <div class="v33-user-box">
+    <div class="v33-user-head">
+      <div><h3>USER &amp; MITRA MANAGEMENT</h3><p>Super User dapat membuat akun Mitra Admin tanpa masuk SQL Editor.</p></div>
+      <button class="admin-close" onclick="closeUserMitraManagement()">Tutup</button>
+    </div>
+    <div class="v33-user-body">
+      <div class="v33-note"><b>Prinsip akses:</b> satu akun Mitra Admin hanya dapat mengubah span yang memiliki <b>Mitra / Subcont</b> yang sama. Akun dibuat melalui Supabase Auth; pembatasan data tetap dijaga oleh RLS database.</div>
+      <div class="v33-user-grid">
+        <div class="v33-user-field"><label>Nama User</label><input id="v33UserName" placeholder="Admin PT ABC"></div>
+        <div class="v33-user-field"><label>Mitra / Subcont</label><input id="v33UserMitra" placeholder="PT ABC"></div>
+        <div class="v33-user-field"><label>Email Login</label><input id="v33UserEmail" type="email" placeholder="admin@ptabc.co.id"></div>
+        <div class="v33-user-field"><label>Password Awal</label><input id="v33UserPassword" type="password" placeholder="Minimal 8 karakter"></div>
+      </div>
+      <div class="v33-user-actions"><button class="btn-light" onclick="clearMitraUserForm()">Clear</button><button class="btn-blue" onclick="createMitraUser()">+ Create Mitra Admin</button></div>
+      <div id="v33UserMsg" class="v33-msg"></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:20px"><div><b style="color:#2c3e50">Registered Users</b><div class="admin-note">Daftar profile yang sudah terdaftar di project.</div></div><button class="btn-light" onclick="loadMitraUsers()">↻ Refresh</button></div>
+      <div style="overflow:auto"><table class="v33-user-table"><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Mitra / Subcont</th><th>Action</th></tr></thead><tbody id="v33UserRows"><tr><td colspan="5" class="child-admin-empty">Belum dimuat.</td></tr></tbody></table></div>
+    </div>
+  </div>
+</section>
 
 <section class="submit-modal" id="submitModal">
   <div class="submit-box">
@@ -704,41 +737,10 @@ select,input{border:1px solid #ccd6de;border-radius:6px;padding:8px 9px;backgrou
 
 <script>
 // Ganti dua nilai berikut dengan Project URL dan Publishable Key dari Supabase. Jangan gunakan service_role key di browser.
-const DEMO_MODE = true;
+const DEMO_MODE = false;
 let session = null;
 function setDbStatus(text,ok=false){const el=document.getElementById('dbStatus');if(el){el.textContent=text;el.style.background=ok?'#e5f5e9':'#fff2d9';el.style.color=ok?'#258344':'#9b680b';}}
-function login(e){
-  e.preventDefault();
-  const username=document.getElementById('loginUser').value.trim().toLowerCase();
-  const password=document.getElementById('loginPass').value;
-  const errorEl=document.getElementById('loginError');
-  errorEl.textContent='';
-  const accounts={
-    viewer:{password:'viewer123',username:'Viewer Recovery',role:'Viewer',canUpdate:false},
-    operator:{password:'operator123',username:'Operator Recovery',role:'Updater',canUpdate:true}
-  };
-  const acc=accounts[username];
-  if(!acc || acc.password!==password){
-    errorEl.textContent='Username atau password salah. Gunakan viewer/viewer123, operator/operator123, atau superuser/super123.';
-    return;
-  }
-  session={username:acc.username,email:username+'@local',role:acc.role,canUpdate:acc.canUpdate,userId:'local-'+username};
-  localStorage.setItem('fiberRecoveryDemoSession',JSON.stringify(session));
-  applySession();
-  data=[];
-  populateGlobalMitraFilter(); initAdmin(); update();
-  setDbStatus('Local Demo Mode • data tersimpan di browser',true);
-}
-
-function applySession(){
-  document.getElementById('loginScreen').style.display='none';
-  document.getElementById('sessionUser').textContent=session.username;
-  const rb=document.getElementById('sessionRole'); rb.textContent=session.role; rb.className='role-badge '+(session.canUpdate?'updater':'viewer');
-  document.querySelectorAll('.updater-only').forEach(el=>el.style.display=session.canUpdate?'':'none');
-  closeEditor(); update();
-}
-function logout(){localStorage.removeItem('fiberRecoveryDemoSession');localStorage.removeItem('fiberRecoveryCurrentUser');localStorage.removeItem('fiberRecoveryRole');session=null;document.body.classList.remove('v24-authenticated');document.getElementById('loginScreen').style.display='flex';document.getElementById('loginUser').value='';document.getElementById('loginPass').value='';document.getElementById('loginError').textContent='';}
-function canUpdate(){return !!session && session.canUpdate;}
+// Authentication is handled exclusively by the Supabase Auth implementation below.
 function closeEditor(){document.getElementById('adminPanel').classList.remove('open');}
 async function auditLog(message){
   console.log('[LOCAL AUDIT]', new Date().toISOString(), message);
@@ -1232,7 +1234,7 @@ async function loadStoredData(){
   }catch(e){
     data=[];
   }
-  setDbStatus('Local Demo Mode • data tersimpan di browser',true);
+  setDbStatus('Supabase Live Mode',true);
   document.getElementById('lastUpdate').textContent='Data: '+data.length+' local span';
 }
 
@@ -1599,105 +1601,6 @@ window.v21GenerateSpans = function(){
 function v22ApplySuperUserButton(){ const b=document.getElementById('v22GenerateSpanBtn'); if(b) b.style.display=v21IsSuperUser()?'inline-flex':'none'; }
 setTimeout(v22ApplySuperUserButton,100); setInterval(v22ApplySuperUserButton,1000);
 
-/* V23 — Super User login compatibility fix */
-(function(){
-  const V23_USERS = [
-    {username:'superuser', password:'super123', role:'super_user', displayName:'Project Owner / Super User'},
-    {username:'super user', password:'super123', role:'super_user', displayName:'Project Owner / Super User'},
-    {username:'super_user', password:'super123', role:'super_user', displayName:'Project Owner / Super User'},
-    {username:'viewer', password:'viewer123', role:'viewer', displayName:'Viewer'},
-    {username:'operator', password:'operator123', role:'updater', displayName:'Operator'}
-  ];
-
-  function v23FindLoginInputs(){
-    const user = document.querySelector(
-      '#username,#loginUsername,#loginUser,#email,input[name="username"],input[name="user"],input[type="text"]'
-    );
-    const pass = document.querySelector(
-      '#password,#loginPassword,input[name="password"],input[type="password"]'
-    );
-    return {user,pass};
-  }
-
-  function v23SetCurrentUser(u){
-    localStorage.setItem('fiberRecoveryCurrentUser', JSON.stringify({
-      username:u.username,
-      role:u.role,
-      displayName:u.displayName,
-      email:u.username
-    }));
-  }
-
-  window.v23TryLocalLogin = function(ev){
-    if(ev) ev.preventDefault();
-    const {user,pass}=v23FindLoginInputs();
-    const username=String(user?.value||'').trim().toLowerCase();
-    const password=String(pass?.value||'');
-    const found=V23_USERS.find(x=>x.username.toLowerCase()===username && x.password===password);
-    if(!found){
-      alert('Username atau password salah.\\n\\nSuper User: superuser\\nPassword: super123');
-      return false;
-    }
-    v23SetCurrentUser(found);
-
-    // Hide common login containers.
-    ['loginScreen','loginModal','loginPage','loginOverlay'].forEach(id=>{
-      const el=document.getElementById(id);
-      if(el) el.style.display='none';
-    });
-
-    // Show dashboard/main containers where available.
-    ['app','appContainer','dashboard','mainApp'].forEach(id=>{
-      const el=document.getElementById(id);
-      if(el) el.style.display='';
-    });
-
-    // Re-run role/UI hooks from the existing dashboard.
-    ['updateUIForRole','applyRoleAccess','renderDashboard','renderAll','refreshDashboard','render'].forEach(fn=>{
-      try{ if(typeof window[fn]==='function') window[fn](); }catch(e){}
-    });
-
-    document.dispatchEvent(new CustomEvent('v23-login-success',{detail:found}));
-    return false;
-  };
-
-  function v23WireLogin(){
-    const {user,pass}=v23FindLoginInputs();
-    if(!user || !pass) return;
-    user.type='text';
-    user.setAttribute('autocomplete','username');
-    pass.setAttribute('autocomplete','current-password');
-
-    const forms=document.querySelectorAll('form');
-    forms.forEach(form=>{
-      const txt=(form.innerText||'').toLowerCase();
-      if(txt.includes('login') || txt.includes('masuk') || form.querySelector('input[type="password"]')){
-        if(form.dataset.v23Wired==='1') return;
-        form.dataset.v23Wired='1';
-        form.addEventListener('submit',window.v23TryLocalLogin,true);
-      }
-    });
-
-    // Also intercept common login button clicks.
-    document.querySelectorAll('button').forEach(btn=>{
-      if(btn.dataset.v23Wired==='1') return;
-      const t=(btn.textContent||'').trim().toLowerCase();
-      if(['login','masuk','sign in'].includes(t)){
-        btn.dataset.v23Wired='1';
-        btn.addEventListener('click',window.v23TryLocalLogin,true);
-      }
-    });
-  }
-
-  window.addEventListener('DOMContentLoaded',()=>{
-    setTimeout(v23WireLogin,50);
-    setTimeout(v23WireLogin,500);
-    setTimeout(v23WireLogin,1500);
-  });
-
-  // Expose credentials in a small local-demo hint if the page has a login help area.
-  window.V23_LOCAL_USERS=V23_USERS;
-})();
 
 </script>
 
@@ -1903,6 +1806,7 @@ function applySession(){
   document.querySelectorAll('.updater-only').forEach(el=>el.style.display=session.canUpdate?'':'none');
   const upload=document.getElementById('v22GenerateSpanBtn');
   if(upload)upload.style.display=liveIsSuperUser()?'inline-flex':'none';
+  const userMgmt=document.getElementById('v33UserMgmtBtn');if(userMgmt)userMgmt.style.display=liveIsSuperUser()?'inline-flex':'none';
   const badge=document.getElementById('accessPrivilegePreview');
   if(badge)badge.textContent='Live access • '+session.role+(session.mitra?' • '+session.mitra:'');
   closeEditor();
@@ -2277,6 +2181,80 @@ function liveInitDropzone(){
   ['dragleave','drop'].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.remove('dragover');}));
   dz.addEventListener('drop',e=>{const f=e.dataTransfer.files?.[0];if(!f)return;const dt=new DataTransfer();dt.items.add(f);input.files=dt.files;smartReadUpload(input);});
 }
+/* V33 USER & MITRA MANAGEMENT */
+const V33_CREATE_USER_FUNCTION='mitra-user-admin';
+function v33ShowMsg(message,type='ok'){
+  const el=document.getElementById('v33UserMsg');if(!el)return;
+  el.textContent=message;el.className='v33-msg '+type;
+}
+function clearMitraUserForm(){['v33UserName','v33UserMitra','v33UserEmail','v33UserPassword'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});const m=document.getElementById('v33UserMsg');if(m){m.textContent='';m.className='v33-msg';}}
+function openUserMitraManagement(){
+  if(!liveIsSuperUser()){alert('Menu ini hanya tersedia untuk Super User.');return;}
+  const modal=document.getElementById('userMitraModal');if(modal)modal.style.display='flex';
+  loadMitraUsers();
+}
+function closeUserMitraManagement(){const modal=document.getElementById('userMitraModal');if(modal)modal.style.display='none';}
+async function loadMitraUsers(){
+  if(!liveIsSuperUser())return;
+  const body=document.getElementById('v33UserRows');if(body)body.innerHTML='<tr><td colspan="5">Loading...</td></tr>';
+  try{
+    const {data,error}=await liveSupabase.functions.invoke(V33_CREATE_USER_FUNCTION,{body:{action:'list'}});
+    if(error)throw error;
+    const rows=data?.users||[];
+    if(!rows.length){if(body)body.innerHTML='<tr><td colspan="5">Belum ada user.</td></tr>';return;}
+    if(body)body.innerHTML=rows.map(r=>`<tr>
+      <td><b>${smartEsc(r.display_name||r.email||'—')}</b></td>
+      <td>${smartEsc(r.email||'—')}</td>
+      <td><span class="v33-role-chip">${smartEsc(r.role||'viewer')}</span></td>
+      <td><span class="v33-mitra-chip">${smartEsc(r.mitra_subcont||'—')}</span></td>
+      <td>${r.id===session?.userId?'<span style="color:#8794a0">Current</span>':'<button class="btn-light" onclick="openProfileRoleEditor(\''+String(r.id).replace(/'/g,"\\'")+'\',\''+String(r.display_name||'').replace(/'/g,"\\'")+'\',\''+String(r.role||'viewer').replace(/'/g,"\\'")+'\',\''+String(r.mitra_subcont||'').replace(/'/g,"\\'")+'\')">Edit Access</button>'}</td>
+    </tr>`).join('');
+  }catch(ex){if(body)body.innerHTML='<tr><td colspan="5">Gagal memuat user: '+smartEsc(ex?.message||'Unknown error')+'</td></tr>';}
+}
+async function createMitraUser(){
+  if(!liveIsSuperUser()){alert('Hanya Super User yang dapat membuat akun mitra.');return;}
+  const name=String(document.getElementById('v33UserName')?.value||'').trim();
+  const mitra=String(document.getElementById('v33UserMitra')?.value||'').trim();
+  const email=String(document.getElementById('v33UserEmail')?.value||'').trim().toLowerCase();
+  const password=String(document.getElementById('v33UserPassword')?.value||'');
+  if(!name||!mitra||!email||!password){v33ShowMsg('Nama, Mitra/Subcont, Email, dan Password wajib diisi.','err');return;}
+  if(password.length<8){v33ShowMsg('Password awal minimal 8 karakter.','err');return;}
+  v33ShowMsg('Membuat akun Mitra Admin…','ok');
+  try{
+    const {data,error}=await liveSupabase.functions.invoke(V33_CREATE_USER_FUNCTION,{body:{email,password,display_name:name,mitra_subcont:mitra,role:'mitra_admin'}});
+    if(error)throw error;
+    if(data?.error)throw new Error(data.error);
+    await auditLog('Create Mitra Admin '+email+' / '+mitra);
+    v33ShowMsg('Akun Mitra Admin berhasil dibuat: '+email+' • '+mitra,'ok');
+    clearMitraUserForm();
+    v33ShowMsg('Akun Mitra Admin berhasil dibuat: '+email+' • '+mitra,'ok');
+    await loadMitraUsers();
+  }catch(ex){v33ShowMsg('Gagal membuat akun: '+(ex?.message||'Unknown error')+'. Pastikan Edge Function create-mitra-user sudah aktif.','err');}
+}
+async function updateMitraProfile(profileId){
+  if(!liveIsSuperUser())return;
+  const role=document.getElementById('v33EditRole')?.value||'viewer';
+  const mitra=String(document.getElementById('v33EditMitra')?.value||'').trim();
+  const name=String(document.getElementById('v33EditName')?.value||'').trim();
+  if(!name||!mitra){alert('Nama dan Mitra/Subcont wajib diisi.');return;}
+  const {error}=await liveSupabase.from('profiles').update({display_name:name,role,mitra_subcont:mitra}).eq('id',profileId);
+  if(error){alert('Gagal update access: '+error.message);return;}
+  await auditLog('Update profile '+profileId+' -> '+role+' / '+mitra);
+  document.getElementById('v33ProfileEditModal').style.display='none';
+  await loadMitraUsers();
+}
+function openProfileRoleEditor(id,name,role,mitra){
+  if(!liveIsSuperUser())return;
+  const modal=document.getElementById('v33ProfileEditModal');
+  if(!modal){
+    const d=document.createElement('div');d.id='v33ProfileEditModal';d.className='v33-user-modal';d.innerHTML=`<div class="v33-user-box" style="max-width:520px"><div class="v33-user-head"><div><h3>EDIT USER ACCESS</h3><p>Ubah role dan mapping Mitra/Subcont.</p></div><button class="admin-close" onclick="document.getElementById('v33ProfileEditModal').style.display='none'">Tutup</button></div><div class="v33-user-body"><div class="v33-user-grid"><div class="v33-user-field full"><label>Nama</label><input id="v33EditName"></div><div class="v33-user-field"><label>Role</label><select id="v33EditRole"><option value="mitra_admin">mitra_admin</option><option value="updater">updater</option><option value="viewer">viewer</option></select></div><div class="v33-user-field"><label>Mitra / Subcont</label><input id="v33EditMitra"></div></div><div class="v33-user-actions"><button class="btn-blue" id="v33EditSave">Save Access</button></div></div></div>`;document.body.appendChild(d);
+    document.getElementById('v33EditSave').onclick=()=>updateMitraProfile(d.dataset.profileId);
+  }
+  modal.dataset.profileId=id;modal.style.display='flex';
+  document.getElementById('v33EditName').value=name||'';document.getElementById('v33EditRole').value=role||'viewer';document.getElementById('v33EditMitra').value=mitra||'';
+}
+window.openUserMitraManagement=openUserMitraManagement;window.closeUserMitraManagement=closeUserMitraManagement;window.createMitraUser=createMitraUser;window.loadMitraUsers=loadMitraUsers;window.clearMitraUserForm=clearMitraUserForm;window.openProfileRoleEditor=openProfileRoleEditor;
+
 async function liveBootstrap(){
   // Purge old demo sessions so no one can accidentally enter without Supabase Auth.
   ['fiberRecoveryDemoSession','fiberRecoveryCurrentUser','fiberRecoveryRole','fiberRecoveryDemoData','fiberRecoverySpansV21'].forEach(k=>localStorage.removeItem(k));
