@@ -6,6 +6,8 @@
 <title>Project Recovery Monitoring Dashboard</title>
 <link rel="preconnect" href="https://cdn.jsdelivr.net">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
@@ -89,7 +91,347 @@ select,input{border:1px solid #ccd6de;border-radius:6px;padding:8px 9px;backgrou
 .ms-timing{display:block;margin-top:2px;color:#6b7785;font-size:9px}
 
 .login-diagnostic{margin-top:12px;border:1px solid #e6e9ef;border-radius:10px;padding:10px;background:#fafbfc;font-size:12px;text-align:left;display:none}.diag-title{font-weight:700;margin-bottom:7px;color:#344054}.diag-row{display:flex;justify-content:space-between;gap:12px;padding:3px 0;border-bottom:1px dashed #eee}.diag-row:last-child{border-bottom:0}.diag-ok{color:#258344;font-weight:700}.diag-warn{color:#9b680b;font-weight:700}.diag-bad{color:#c53b32;font-weight:700}.diag-neutral{color:#667085}
+
+/* V18 Evidence & Document links */
+.evidence-link-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.evidence-link-card{border:1px solid #e5e7eb;border-radius:12px;padding:12px;background:#fff}.evidence-link-card .ev-head{display:flex;justify-content:space-between;gap:8px;margin-bottom:8px}.ev-title{font-weight:700}.ev-meta{font-size:12px;opacity:.7}.ev-type-badge{font-size:11px;padding:4px 7px;border-radius:999px;background:#eef2ff}.evidence-empty{padding:18px;border:1px dashed #d1d5db;border-radius:12px;text-align:center;opacity:.7}@media(max-width:800px){.evidence-link-grid{grid-template-columns:1fr}}
+
+.doc-link-grid{display:grid;grid-template-columns:180px 1fr;gap:10px}
+.doc-link-form{border:1px solid #e4e9ee;border-radius:10px;padding:10px;background:#f8fafb}
+.doc-link-list{display:flex;flex-direction:column;gap:7px;margin-top:10px}
+.doc-link-row{display:flex;align-items:center;justify-content:space-between;gap:10px;border:1px solid #e3e8ed;border-radius:9px;padding:9px 10px;background:#fff}
+.doc-link-info{min-width:0}.doc-link-info strong{display:block;font-size:12px}.doc-link-info span{display:block;font-size:11px;color:#7a8792;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:520px}
+.doc-link-actions{display:flex;gap:6px;flex-shrink:0}
+.link-evidence-btn{display:inline-flex;align-items:center;gap:5px;border:1px solid #d6e1ea;background:#fff;border-radius:8px;padding:6px 9px;color:#286b9f;font-weight:800;font-size:11px;cursor:pointer}
+.link-evidence-btn:hover{background:#eef6fb}
+.evidence-summary{display:flex;flex-direction:column;gap:5px;align-items:flex-start}.evidence-summary .sub-link{font-size:10px;color:#778592}
+@media(max-width:700px){.doc-link-grid{grid-template-columns:1fr}}
+
+/* V21 — Site ID/Name display + Super User span-pair import */
+.v21-site-pair{line-height:1.25}
+.v21-site-pair .site-id{font-weight:800}
+.v21-site-pair .site-name{font-size:12px;opacity:.72;margin-top:3px}
+.v21-import-note{padding:12px 14px;border:1px solid var(--border,#e5e7eb);border-radius:12px;background:var(--card,#fff);font-size:13px}
+.v21-import-table{width:100%;border-collapse:collapse;margin-top:12px;font-size:12px}
+.v21-import-table th,.v21-import-table td{padding:7px 8px;border-bottom:1px solid var(--border,#e5e7eb);text-align:left}
+.v21-import-errors{max-height:180px;overflow:auto;padding:10px;border-radius:10px;background:#fff7ed;border:1px solid #fed7aa;font-size:12px}
+.v21-empty{padding:28px 16px;text-align:center;border:1px dashed var(--border,#d1d5db);border-radius:14px;opacity:.75}
+
+
+/* V22 */
+.v22-site{display:flex;flex-direction:column;gap:2px}.v22-site-id{font-weight:800}.v22-site-name{font-size:10px;color:#73808d}.v22-site-sep{font-size:9px;color:#a0aab3}.v22-import-only{display:inline-flex}
 </style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+<style>
+/* V28 Smart Upload */
+#v21ImportModal .modal-content{box-shadow:0 20px 60px rgba(15,23,42,.22)}
+#smartMapping table th,#smartMapping table td,
+#v21ImportPreview table th,#v21ImportPreview table td{border-bottom:1px solid #eef2f6;padding:7px;text-align:left}
+#smartMapping table th{background:#f8fafc}
+</style>
+
+
+<style>
+/* V29 — Fix Upload Data popup positioning */
+#v21ImportModal.modal{
+  position:fixed !important;
+  inset:0 !important;
+  width:100vw !important;
+  height:100vh !important;
+  margin:0 !important;
+  padding:24px !important;
+  box-sizing:border-box !important;
+  background:rgba(15,23,42,.52) !important;
+  display:none;
+  align-items:center !important;
+  justify-content:center !important;
+  z-index:99999 !important;
+  overflow-y:auto !important;
+}
+#v21ImportModal.modal .modal-content{
+  position:relative !important;
+  width:min(1080px, calc(100vw - 48px)) !important;
+  max-width:1080px !important;
+  max-height:calc(100vh - 48px) !important;
+  margin:0 auto !important;
+  overflow:auto !important;
+  background:#fff !important;
+  border-radius:16px !important;
+  box-sizing:border-box !important;
+  box-shadow:0 24px 70px rgba(15,23,42,.30) !important;
+}
+#v21ImportModal .modal-header{
+  position:sticky;
+  top:0;
+  z-index:2;
+  background:#fff;
+  padding:18px 20px;
+  border-bottom:1px solid #e5e7eb;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+}
+#v21ImportModal .modal-content > div:not(.modal-header){
+  box-sizing:border-box;
+}
+#v21ImportModal .btn{
+  display:inline-flex !important;
+  align-items:center !important;
+  justify-content:center !important;
+  gap:6px !important;
+  cursor:pointer !important;
+}
+#v21ImportModal .btn-primary{
+  background:#173149 !important;
+  color:#fff !important;
+}
+#v21ImportModal .btn-secondary{
+  background:#eef2f6 !important;
+  color:#173149 !important;
+}
+#v21ImportModal #v21ImportBtn,
+#v21ImportModal label.btn{
+  min-height:42px;
+}
+#v21ImportModal #v21GenerateBtn:disabled{
+  opacity:.45;
+  cursor:not-allowed !important;
+}
+</style>
+
+
+<style>
+/* ============================================================
+   V30 — Polished Smart Upload UI
+   Proportional, centered, enterprise dashboard styling.
+   ============================================================ */
+#v21ImportModal.modal{
+  position:fixed !important;
+  inset:0 !important;
+  width:100vw !important;
+  height:100vh !important;
+  padding:24px !important;
+  margin:0 !important;
+  box-sizing:border-box !important;
+  display:none;
+  align-items:center !important;
+  justify-content:center !important;
+  background:rgba(15,27,42,.56) !important;
+  backdrop-filter:blur(3px);
+  z-index:99999 !important;
+  overflow:auto !important;
+}
+.v30-upload-modal{
+  width:min(930px, calc(100vw - 48px));
+  max-height:min(760px, calc(100vh - 48px));
+  background:#fff;
+  border-radius:20px;
+  overflow:hidden;
+  box-shadow:0 28px 80px rgba(15,35,55,.32);
+  color:#20344d;
+  display:flex;
+  flex-direction:column;
+}
+.v30-upload-hero{
+  min-height:142px;
+  padding:24px 28px 22px;
+  color:#fff;
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:20px;
+  position:relative;
+  overflow:hidden;
+  background:
+    radial-gradient(circle at 88% 20%, rgba(67,174,255,.35), transparent 24%),
+    linear-gradient(120deg,#123b62 0%,#075da4 56%,#0878c7 100%);
+}
+.v30-upload-hero:after{
+  content:"";
+  position:absolute;
+  width:260px;height:110px;
+  right:-30px;bottom:-28px;
+  border-top:2px solid rgba(255,255,255,.25);
+  transform:skewX(-25deg) rotate(-12deg);
+  box-shadow:0 -24px 0 rgba(255,255,255,.10),0 -48px 0 rgba(255,255,255,.06);
+}
+.v30-hero-copy{position:relative;z-index:1;max-width:780px}
+.v30-hero-title{
+  display:flex;
+  align-items:center;
+  gap:13px;
+  font-size:24px;
+  line-height:1.15;
+  font-weight:800;
+}
+.v30-hero-sub{
+  font-size:13px;
+  font-weight:500;
+  opacity:.82;
+  margin-top:5px;
+}
+.v30-upload-icon{
+  width:40px;height:40px;border-radius:12px;
+  display:flex;align-items:center;justify-content:center;
+  background:rgba(255,255,255,.16);
+  border:1px solid rgba(255,255,255,.22);
+  font-size:27px;font-weight:700;
+}
+.v30-hero-description{
+  margin:10px 0 0 53px;
+  font-size:13px;
+  line-height:1.5;
+  opacity:.92;
+}
+.v30-close{
+  position:relative;z-index:3;
+  width:40px;height:40px;border:0;border-radius:11px;
+  background:rgba(255,255,255,.92);
+  color:#193650;font-size:27px;line-height:1;
+  cursor:pointer;
+  flex:none;
+}
+.v30-close:hover{background:#fff;transform:translateY(-1px)}
+.v30-body{
+  padding:20px 24px 18px;
+  overflow:auto;
+}
+.v30-steps{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  margin:0 auto 19px;
+  max-width:720px;
+}
+.v30-step{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:5px;
+  min-width:92px;
+  color:#7b8da1;
+  font-size:11px;
+  white-space:nowrap;
+}
+.v30-step span{
+  width:34px;height:34px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  background:#e8eef4;color:#334b63;font-weight:800;font-size:14px;
+}
+.v30-step b{font-weight:700}
+.v30-step.active{color:#0869cf}
+.v30-step.active span{background:#0878dc;color:#fff;box-shadow:0 5px 14px rgba(8,120,220,.22)}
+.v30-step-line{
+  height:2px;background:#d8e1ea;flex:1;max-width:95px;margin:0 3px 18px;
+}
+.v30-upload-grid{
+  display:grid;
+  grid-template-columns:1.05fr .95fr;
+  gap:18px;
+}
+.v30-dropzone{
+  min-height:265px;
+  border:1.5px dashed #2d8cff;
+  border-radius:14px;
+  background:linear-gradient(180deg,#fbfdff 0%,#f4f9ff 100%);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  text-align:center;padding:20px;
+  box-sizing:border-box;
+  transition:.18s ease;
+}
+.v30-dropzone.dragover{
+  background:#eef7ff;
+  border-color:#0869cf;
+  transform:scale(1.005);
+}
+.v30-cloud{
+  width:52px;height:52px;border-radius:16px;
+  background:#2388e9;color:#fff;
+  display:flex;align-items:center;justify-content:center;
+  font-size:32px;font-weight:800;
+  margin-bottom:11px;
+  box-shadow:0 9px 22px rgba(35,136,233,.22);
+}
+.v30-drop-title{font-size:17px;font-weight:800;color:#193653}
+.v30-drop-sub{font-size:12px;line-height:1.55;color:#61758c;margin:7px 0 13px}
+.v30-pick-btn{
+  display:inline-flex;align-items:center;gap:8px;
+  background:#0878dc;color:#fff;border-radius:9px;
+  padding:10px 23px;font-weight:800;font-size:13px;
+  cursor:pointer;box-shadow:0 5px 12px rgba(8,120,220,.18);
+}
+.v30-pick-btn:hover{background:#066ac5}
+.v30-pick-btn input{display:none}
+.v30-file-note{font-size:11px;color:#72859a;margin-top:9px}
+.v30-file-info{font-size:11px;font-weight:700;color:#0878dc;margin-top:5px;max-width:100%;overflow:hidden;text-overflow:ellipsis}
+.v30-example-card{
+  border:1px solid #e2e9f0;border-radius:14px;background:#f8fafc;
+  padding:15px 16px;min-height:235px;
+}
+.v30-section-title{font-size:14px;font-weight:800;margin-bottom:7px;color:#1e3853}
+.v30-example-row{
+  display:grid;
+  grid-template-columns:30px 102px 1fr;
+  align-items:center;
+  gap:8px;
+  min-height:48px;
+  border-top:1px solid #e5ebf1;
+  font-size:11px;
+  line-height:1.35;
+}
+.v30-example-row:first-of-type{border-top:0}
+.v30-example-row > span:last-child{color:#63768a}
+.v30-example-icon{
+  width:27px;height:27px;border-radius:7px;
+  display:flex;align-items:center;justify-content:center;
+  color:#fff;font-size:13px;font-weight:800;
+}
+.v30-example-icon.excel{background:#20a365}
+.v30-example-icon.docs{background:#367de8}
+.v30-example-icon.boq{background:#7b49bd}
+.v30-example-icon.other{background:#f08b20}
+.v30-smart-note{
+  margin-top:14px;
+  padding:12px 15px;
+  display:flex;gap:11px;align-items:flex-start;
+  border-radius:12px;
+  background:#eef8ff;
+  color:#536d86;
+  font-size:11.5px;line-height:1.45;
+}
+.v30-smart-note b{display:block;color:#0869cf;font-size:13px;margin-bottom:2px}
+.v30-note-icon{font-size:20px;line-height:1}
+.v30-summary,.v30-mapping,.v30-preview{margin-top:12px}
+.v30-footer{
+  border-top:1px solid #e7edf3;
+  padding:14px 24px;
+  display:flex;justify-content:space-between;align-items:center;
+  gap:10px;background:#fff;
+}
+.v30-footer-right{display:flex;gap:9px}
+.v30-btn{
+  border:0;border-radius:9px;padding:10px 16px;
+  min-height:40px;font-size:12px;font-weight:800;cursor:pointer;
+}
+.v30-btn-light{background:#edf2f6;color:#203b55}
+.v30-btn-light:hover{background:#e3eaf0}
+.v30-btn-primary{background:#173b5e;color:#fff}
+.v30-btn-primary:hover{background:#0f304d}
+.v30-btn-primary:disabled{background:#aeb9c5;color:#fff;opacity:.75;cursor:not-allowed}
+@media(max-width:760px){
+  #v21ImportModal.modal{padding:12px}
+  .v30-upload-modal{width:100%;max-height:calc(100vh - 24px);border-radius:15px}
+  .v30-upload-hero{padding:18px}
+  .v30-hero-title{font-size:19px}
+  .v30-hero-description{margin-left:53px;font-size:12px}
+  .v30-body{padding:15px}
+  .v30-upload-grid{grid-template-columns:1fr}
+  .v30-example-card{min-height:auto}
+  .v30-steps{transform:scale(.86);transform-origin:center}
+  .v30-footer{padding:12px 15px}
+}
+</style>
+
 </head>
 <body>
 <div class="login-screen" id="loginScreen">
@@ -97,9 +439,10 @@ select,input{border:1px solid #ccd6de;border-radius:6px;padding:8px 9px;backgrou
     <div class="login-logo">FIBER RECOVERY CONTROL TOWER</div>
     <h2>Login Dashboard</h2>
     <p>Silakan login sesuai hak akses. Viewer hanya dapat melihat monitoring; Updater dapat melakukan update progress span dan milestone.</p>
-    <form onsubmit="login(event)">
-      <div class="login-field"><label>Username</label><input id="loginUser" type="text" autocomplete="username" placeholder="viewer / operator" required></div>
-      <div class="login-field"><label>Password</label><input id="loginPass" type="password" autocomplete="current-password" required></div>
+    <form id="localAccessForm" onsubmit="return login(event)">
+      <div class="login-field"><label>Email Access</label><input id="loginUser" type="email" autocomplete="email" placeholder="nama@perusahaan.com" required></div>
+      <div class="login-field"><label>Password</label><input id="loginPass" type="password" autocomplete="current-password" placeholder="Password akun Anda" required></div>
+      <div id="accessPrivilegePreview" style="margin:10px 0 14px;padding:10px 12px;border-radius:10px;background:#f4f7fa;color:#526273;font-size:12px">Privilege akan ditentukan otomatis berdasarkan email.</div>
       <div class="login-error" id="loginError">
 <div id="loginDiagnostic" class="login-diagnostic">
   <div class="diag-title">Login Diagnostic</div>
@@ -110,9 +453,9 @@ select,input{border:1px solid #ccd6de;border-radius:6px;padding:8px 9px;backgrou
   <div class="diag-row"><span>Role</span><span id="diagRole" class="diag-neutral">Waiting</span></div>
   <div class="diag-row"><span>Details</span><span id="diagDetails" class="diag-neutral">—</span></div>
 </div></div>
-      <button class="login-submit" type="submit">Masuk ke Dashboard</button>
+      <button class="login-submit" type="submit">Masuk dengan Email</button>
     </form>
-    <div class="demo-note"><b>Local Demo Login</b><br>Login menggunakan email/password dari Local Demo Login. Hak akses Viewer / Updater diatur pada tabel <b>profiles</b>.</div>
+    <div class="demo-note"><b>Live Access</b><br>Login menggunakan akun email yang sudah dibuat di Supabase. Hak akses ditentukan oleh Project Owner.</div>
   </div>
 </div>
 <header class="topbar">
@@ -123,7 +466,7 @@ select,input{border:1px solid #ccd6de;border-radius:6px;padding:8px 9px;backgrou
   <div class="actions">
     <span class="session"><span id="sessionUser"></span><span class="role-badge" id="sessionRole"></span></span>
     <button class="btn-light" onclick="downloadCSV()">Export Excel/CSV</button>
-    <button class="btn-blue updater-only" onclick="openSubmitModal()">+ Submit / Upload Span</button>
+    <button type="button" class="btn btn-primary" id="v22GenerateSpanBtn" onclick="smartOpenUpload()">⬆ Upload Data</button>
     
     <button class="btn-light" onclick="logout()">Logout</button>
   </div>
@@ -170,7 +513,7 @@ select,input{border:1px solid #ccd6de;border-radius:6px;padding:8px 9px;backgrou
       <h3 class="card-title" style="margin:0">ADMIN — UPDATE RECOVERY SPAN</h3>
       <div class="admin-note">Update mengikuti struktur Parent Span → Child Span. Nilai Parent untuk Length, Recovered dan Progress dihitung otomatis dari seluruh Child Span.</div>
     </div>
-    <span><span class="badge">Updater Control</span><button class="admin-close" onclick="closeEditor()">Tutup</button></span>
+    <span><span class="badge">Updater Control</span></span>
   </div>
 
   <div class="admin-grid">
@@ -219,14 +562,30 @@ select,input{border:1px solid #ccd6de;border-radius:6px;padding:8px 9px;backgrou
         </div>
         <div class="admin-field full">
           <label>Dokumen Span — BoQ / ABD / KMZ</label>
-          <div class="doc-list" id="adminDocs"></div>
-          <label class="doc-upload" style="width:max-content">+ Upload Dokumen <input id="docInput" type="file" multiple accept=".xlsx,.xls,.csv,.pdf,.kmz,.kml,.doc,.docx,.zip"></label>
-          <div class="admin-note">Dokumen tersimpan lokal pada browser prototype. Untuk produksi/multi-user, gunakan Firebase Storage / server repository.</div>
+          <div class="doc-link-form">
+            <div class="doc-link-grid">
+              <label>Jenis Dokumen
+                <select id="docLinkType"><option>BoQ</option><option>ABD</option><option>KMZ / KML</option><option>Engineering</option><option>Other</option></select>
+              </label>
+              <label>Document URL
+                <input id="docLinkUrl" type="url" placeholder="https://drive.google.com/...">
+              </label>
+              <label style="grid-column:1/-1">Catatan
+                <input id="docLinkNote" type="text" placeholder="Opsional — contoh: BoQ final rev.02">
+              </label>
+            </div>
+            <div style="display:flex;justify-content:flex-end;margin-top:8px">
+              <button type="button" class="btn-blue" onclick="saveSpanDocumentLink()">+ Tambah Document Link</button>
+            </div>
+          </div>
+          <div id="adminDocs" class="doc-link-list"></div>
+          <div class="admin-note">Tidak ada upload file. Admin Mitra cukup memasukkan link Google Drive / Docs / Sheets / OneDrive / SharePoint / cloud repository.</div>
         </div>
       </div>
       <div class="admin-actions">
         <button class="btn-light" onclick="loadAdminSpan()">Reload</button>
         <button class="btn-blue" onclick="saveAdminSpan()">Save Update</button>
+        <button class="btn-light" onclick="closeEditor()">Tutup</button>
       </div>
     </div>
 
@@ -293,7 +652,7 @@ select,input{border:1px solid #ccd6de;border-radius:6px;padding:8px 9px;backgrou
   <div class="table-wrap">
   <table><thead>
     <tr>
-      <th>Span ID</th><th>Site A</th><th>Site B</th><th>Region</th><th>Length</th><th>Issue / Root Cause</th><th>Recovery Type</th><th>Recovered</th><th>Progress</th><th>Target</th><th>Status</th><th>Mitra / Subcont</th><th>Documents</th><th class="updater-only">Action</th>
+      <th>Span ID</th><th>Site ID A / Site Name A</th><th>Site ID B / Site Name B</th><th>Region / Area</th><th>Length</th><th>Issue / Root Cause</th><th>Recovery Type</th><th>Recovered</th><th>Progress</th><th>Target</th><th>Status</th><th>Mitra / Subcont</th><th>Evidence &amp; Document</th><th class="updater-only">Action</th>
     </tr>
   </thead><tbody id="projectRows"></tbody></table>
   </div>
@@ -340,7 +699,7 @@ select,input{border:1px solid #ccd6de;border-radius:6px;padding:8px 9px;backgrou
   <div class="card"><h3 class="card-title">Recovery Length by Span</h3><div class="chartbox"><canvas id="budgetChart"></canvas></div><div class="legend"><span><i style="background:#f28b24"></i>Budget</span><span><i style="background:#399bd0"></i>Forecast</span><span><i style="background:#53b56d"></i>Paid</span></div></div>
   <div class="card"><h3 class="card-title">Recovery Progress Trend</h3><div class="chartbox"><canvas id="cashChart"></canvas></div></div>
 </section>
-<div class="footer">Local Demo Mode • Login, update, milestone, parent/child, submit span dan dokumen berjalan lokal di browser. Supabase akan diaktifkan kembali setelah dashboard final.</div>
+<div class="footer">LIVE MODE • Autentikasi, span, milestone, evidence link, dan audit trail tersimpan di Supabase.</div>
 </main>
 
 <script>
@@ -360,13 +719,13 @@ function login(e){
   };
   const acc=accounts[username];
   if(!acc || acc.password!==password){
-    errorEl.textContent='Username atau password salah. Gunakan viewer/viewer123 atau operator/operator123.';
+    errorEl.textContent='Username atau password salah. Gunakan viewer/viewer123, operator/operator123, atau superuser/super123.';
     return;
   }
   session={username:acc.username,email:username+'@local',role:acc.role,canUpdate:acc.canUpdate,userId:'local-'+username};
   localStorage.setItem('fiberRecoveryDemoSession',JSON.stringify(session));
   applySession();
-  data=sampleProjects.map(x=>JSON.parse(JSON.stringify(x)));
+  data=[];
   populateGlobalMitraFilter(); initAdmin(); update();
   setDbStatus('Local Demo Mode • data tersimpan di browser',true);
 }
@@ -378,7 +737,7 @@ function applySession(){
   document.querySelectorAll('.updater-only').forEach(el=>el.style.display=session.canUpdate?'':'none');
   closeEditor(); update();
 }
-function logout(){localStorage.removeItem('fiberRecoveryDemoSession');session=null;document.getElementById('loginScreen').style.display='flex';document.getElementById('loginUser').value='';document.getElementById('loginPass').value='';document.getElementById('loginError').textContent='';}
+function logout(){localStorage.removeItem('fiberRecoveryDemoSession');localStorage.removeItem('fiberRecoveryCurrentUser');localStorage.removeItem('fiberRecoveryRole');session=null;document.body.classList.remove('v24-authenticated');document.getElementById('loginScreen').style.display='flex';document.getElementById('loginUser').value='';document.getElementById('loginPass').value='';document.getElementById('loginError').textContent='';}
 function canUpdate(){return !!session && session.canUpdate;}
 function closeEditor(){document.getElementById('adminPanel').classList.remove('open');}
 async function auditLog(message){
@@ -535,14 +894,14 @@ function renderProjectTable(d){
    const rowClass=parent?'parent-row':'child-row';
    return `<tr class="${rowClass}">
 <td class="project"><span class="${parent?'child-span-id':'child-span-id'}">${childLabel}${toggle}<span>${x.id}</span></span>${badge}${parent&&ch.length?`<div class="parent-summary">Parent span • ${a.length.toFixed(1)} Km scope</div>`:''}</td>
-<td><b>${x.siteA}</b></td><td><b>${x.siteB}</b></td><td>${x.region}</td>
+<td><div class="v22-site"><span class="v22-site-id">${escapeHtml(x.siteIdA||x.siteA||"—")}</span><span class="v22-site-name">${escapeHtml(x.siteNameA||"")}</span></div></td><td><div class="v22-site"><span class="v22-site-id">${escapeHtml(x.siteIdB||x.siteB||"—")}</span><span class="v22-site-name">${escapeHtml(x.siteNameB||"")}</span></div></td><td>${escapeHtml(x.region||x.area||"—")}</td>
 <td><b>${Number(a.length||0).toFixed(1)} Km</b></td><td>${x.issue||"—"}</td><td>${x.recoveryType||"—"}</td><td>${Number(a.recovered||0).toFixed(1)} Km</td>
 <td><div class="progress"><span style="width:${Math.min(100,Number(a.progress||0))}%"></span></div> <b>${Math.round(Number(a.progress||0))}%</b></td>
 <td>${x.target?new Date(x.target).toLocaleDateString('id-ID',{day:'2-digit',month:'short',year:'numeric'}):'—'}</td>
 <td><span class="pill ${statusClass(x.status)}">${x.status}</span></td>
 <td>${x.mitra||"—"}</td><td class="docs-cell" data-span="${x.id}"><span class="doc-empty">Loading…</span></td><td class="updater-only"><button class="update-btn" onclick="openEditor('${x.id}')">Update</button></td></tr>`;
  }).join('');
- document.getElementById('projectRows').innerHTML=rows||`<tr><td colspan="14" style="padding:0"><div class="empty-state"><b>${data.length?'Tidak ada data yang sesuai filter.':'No Recovery Span Submitted'}</b><span>${data.length?'Coba ubah filter yang dipilih.':'Belum ada span yang masuk ke program recovery. Gunakan + Submit / Upload Span untuk memulai.'}</span></div></td></tr>`;
+ document.getElementById('projectRows').innerHTML=rows||`<tr><td colspan="14" style="padding:0"><div class="empty-state"><b>${data.length?'Tidak ada data yang sesuai filter.':'No Recovery Span Submitted'}</b><span>${data.length?'Coba ubah filter yang dipilih.':'Belum ada span yang masuk ke program recovery. Gunakan <b>Generate Span</b> oleh Super User / Project Owner untuk memasukkan template Site A–B.'}</span></div></td></tr>`;
  renderTableDocs();
 }
 function bindTableFilters(){
@@ -596,22 +955,35 @@ bindTableFilters();
 document.getElementById('milestoneSpan').addEventListener('change',renderMilestones);
 document.getElementById('milestoneStatus').addEventListener('change',renderMilestones);
 document.getElementById('adminSpan').addEventListener('change',loadAdminSpan);
-document.getElementById('docInput').addEventListener('change',async e=>{const id=document.getElementById('adminSpan').value;if(e.target.files.length)await uploadDocs(id,e.target.files);e.target.value='';});
+document.getElementById('docLinkUrl')?.addEventListener('keydown',e=>{if(e.key==='Enter')saveSpanDocumentLink();});
 function bootstrap(){
-  data=sampleProjects.map(x=>JSON.parse(JSON.stringify(x)));
-  const saved=localStorage.getItem('fiberRecoveryDemoSession');
-  if(saved){try{session=JSON.parse(saved);applySession();}catch(e){localStorage.removeItem('fiberRecoveryDemoSession');}}
-  if(!session){document.getElementById('loginScreen').style.display='flex';setDbStatus('Demo Mode • login lokal',true);}
-  else {setDbStatus('Demo Mode • local data',true);populateGlobalMitraFilter();initAdmin();update();}
+  data=[];
+  session=null;
+  const loginScreen=document.getElementById('loginScreen');
+  if(loginScreen)loginScreen.style.display='flex';
+  setDbStatus('Live Mode • menunggu autentikasi Supabase');
+  populateGlobalMitraFilter();initAdmin();update();
 }
 
 bootstrap();
 
 function downloadCSV(){
- const d=filtered(), headers=['Project','Region','Program','Target','Progress','Budget','Forecast','Paid','Status','Scope','Time','Cost','Risk','Quality','Phase'];
- const rows=d.map(x=>[x.id,x.siteA,x.siteB,x.region,x.length,x.recovered,x.progress,x.recoveryType,x.target,x.status,x.quality,x.issue,x.action||'',x.pic]);
- const csv=[headers,...rows].map(r=>r.map(v=>`"${String(v).replaceAll('"','""')}"`).join(',')).join('\\n');
- const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8;'}));a.download='project-recovery-dashboard.csv';a.click();
+  const d=filtered();
+  const headers=['Span ID','Site ID A','Site Name A','Site ID B','Site Name B','Region/Area','Length (Km)','Issue / Root Cause','Recovery Type','Recovered (Km)','Progress (%)','Target','Status','Mitra / Subcont'];
+  const rows=d.map(x=>{
+    const ch=childrenOf(x.id), a=ch.length?aggregateParent(x):x;
+    return [x.id,x.siteIdA||x.siteA||'',x.siteNameA||'',x.siteIdB||x.siteB||'',x.siteNameB||'',x.region||x.area||'',Number(a.length||0),x.issue||x.rootCause||'',x.recoveryType||'',Number(a.recovered||0),Math.round(Number(a.progress||0)),x.target||'',x.status||'',x.mitra||''];
+  });
+  const csv='\ufeff'+[headers,...rows].map(r=>r.map(v=>`"${String(v??'').replaceAll('"','""')}"`).join(',')).join('\r\n');
+  const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;
+  a.download=`fiber-recovery-${new Date().toISOString().slice(0,10)}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
 }
 
 const milestoneTemplate = [
@@ -816,7 +1188,7 @@ function loadAdminSpan(){
 function renderAdminChildRows(parentId){
   const rows=document.getElementById('adminChildRows'); if(!rows)return;
   const ch=childrenOf(parentId);
-  rows.innerHTML=ch.length?ch.map(c=>`<tr><td><b class="project">${escapeHtml(c.id)}</b></td><td>${escapeHtml(c.siteA)} → ${escapeHtml(c.siteB)}</td><td>${Number(c.length||0).toFixed(1)} Km</td><td>${Number(c.recovered||0).toFixed(1)} Km</td><td><b>${Number(c.progress||0)}%</b></td><td><span class="pill ${statusClass(c.status)}">${escapeHtml(c.status)}</span></td><td>${c.target||'—'}</td><td>${escapeHtml(c.mitra||'—')}</td><td><button class="child-admin-edit" onclick="loadAdminChild('${c.id}')">Edit</button></td></tr>`).join(''):'<tr><td colspan="9" class="child-admin-empty">Tidak ada Child Span. Span ini masih standalone / parent tanpa child.</td></tr>';
+  rows.innerHTML=ch.length?ch.map(c=>`<tr><td><b class="project">${escapeHtml(c.id)}</b></td><td><span class="v22-site-id">${escapeHtml(c.siteIdA||c.siteA)}</span> / ${escapeHtml(c.siteNameA||"—")} → <span class="v22-site-id">${escapeHtml(c.siteIdB||c.siteB)}</span> / ${escapeHtml(c.siteNameB||"—")}</td><td>${Number(c.length||0).toFixed(1)} Km</td><td>${Number(c.recovered||0).toFixed(1)} Km</td><td><b>${Number(c.progress||0)}%</b></td><td><span class="pill ${statusClass(c.status)}">${escapeHtml(c.status)}</span></td><td>${c.target||'—'}</td><td>${escapeHtml(c.mitra||'—')}</td><td><button class="child-admin-edit" onclick="loadAdminChild('${c.id}')">Edit</button></td></tr>`).join(''):'<tr><td colspan="9" class="child-admin-empty">Tidak ada Child Span. Span ini masih standalone / parent tanpa child.</td></tr>';
 }
 function loadAdminChild(id){
   const c=data.find(v=>v.id===id); if(!c||!c.parentId)return;
@@ -856,9 +1228,9 @@ async function saveAdminSpan(){
 async function loadStoredData(){
   try{
     const saved=localStorage.getItem('fiberRecoveryDemoData');
-    data=saved?JSON.parse(saved):sampleProjects.map(x=>JSON.parse(JSON.stringify(x)));
+    data=saved?JSON.parse(saved):[];
   }catch(e){
-    data=sampleProjects.map(x=>JSON.parse(JSON.stringify(x)));
+    data=[];
   }
   setDbStatus('Local Demo Mode • data tersimpan di browser',true);
   document.getElementById('lastUpdate').textContent='Data: '+data.length+' local span';
@@ -903,6 +1275,1032 @@ function handleSpanCSV(file){
 }
 function downloadSpanTemplate(){const csv='Site A,Site B,Region,Length\nBDG-001,BDG-014,Jawa Barat,12.6\nBDG-014,BDG-027,Jawa Barat,8.4\n';const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));a.download='template_submit_recovery_span.csv';a.click();}
 
+
+/* V19: Document URL + Evidence URL workflow */
+const V19_DOC_KEY='fiberRecoveryDocumentLinksV19';
+const V19_EVIDENCE_KEY='fiberRecoveryEvidenceLinksV19';
+const V19_MILESTONES=['Survey / Assessment','Engineering / BoQ','Material Ready','Manpower Ready','Recovery Execution','Testing / OTDR','Acceptance / QE','Closing'];
+function v19Load(key){try{return JSON.parse(localStorage.getItem(key)||'[]')}catch(e){return[]}}
+function v19Save(key,a){localStorage.setItem(key,JSON.stringify(a))}
+function v19Esc(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
+function v19Session(){try{return JSON.parse(localStorage.getItem('fiberRecoveryDemoSession')||'null')}catch(e){return null}}
+function v19CanEdit(){return !!v19Session()?.canUpdate}
+function v19DocCount(id){return v19Load(V19_DOC_KEY).filter(x=>x.spanId===id).length}
+function v19EvidenceCount(id){return v19Load(V19_EVIDENCE_KEY).filter(x=>x.spanId===id).length}
+function v19TotalLinks(id){return v19DocCount(id)+v19EvidenceCount(id)}
+
+function saveSpanDocumentLink(){
+  if(!v19CanEdit()){alert('Akses Viewer hanya dapat melihat dokumen.');return}
+  const spanId=adminEditingId||document.getElementById('adminSpan')?.value;
+  const type=document.getElementById('docLinkType')?.value||'Other';
+  const url=document.getElementById('docLinkUrl')?.value.trim();
+  const note=document.getElementById('docLinkNote')?.value.trim()||'';
+  if(!spanId||!url){alert('Document URL wajib diisi.');return}
+  try{new URL(url)}catch(e){alert('Format URL tidak valid. Gunakan link https://...');return}
+  const a=v19Load(V19_DOC_KEY),u=v19Session();
+  a.push({id:'DOC-'+Date.now().toString(36),spanId,type,url,note,createdAt:new Date().toLocaleString('id-ID'),createdBy:u?.username||'local-user'});
+  v19Save(V19_DOC_KEY,a);
+  document.getElementById('docLinkUrl').value='';document.getElementById('docLinkNote').value='';
+  renderAdminDocs(spanId);renderTableDocs();
+}
+function deleteSpanDocumentLink(id,spanId){
+  if(!v19CanEdit())return;
+  if(!confirm('Hapus document link ini?'))return;
+  v19Save(V19_DOC_KEY,v19Load(V19_DOC_KEY).filter(x=>x.id!==id));
+  renderAdminDocs(spanId);renderTableDocs();
+}
+function renderAdminDocs(spanId){
+  const el=document.getElementById('adminDocs');if(!el)return;
+  const rows=v19Load(V19_DOC_KEY).filter(x=>x.spanId===spanId);
+  el.innerHTML=rows.length?rows.map(x=>`<div class="doc-link-row"><div class="doc-link-info"><strong>🔗 ${v19Esc(x.type)}</strong><span>${v19Esc(x.url)}${x.note?' • '+v19Esc(x.note):''}</span></div><div class="doc-link-actions"><a class="btn-light" href="${v19Esc(x.url)}" target="_blank" rel="noopener noreferrer">Open</a>${v19CanEdit()?`<button class="btn-light" onclick="deleteSpanDocumentLink('${v19Esc(x.id)}','${v19Esc(spanId)}')">Hapus</button>`:''}</div></div>`).join(''):'<div class="doc-empty">Belum ada document link.</div>';
+}
+function renderTableDocs(){
+  document.querySelectorAll('.docs-cell[data-span]').forEach(c=>{
+    const id=c.dataset.span,docs=v19DocCount(id),ev=v19EvidenceCount(id),total=docs+ev;
+    c.innerHTML=`<div class="evidence-summary"><button class="link-evidence-btn" onclick="openEvidenceLinkModal('${v19Esc(id)}','${v19Esc(id)}')">🔗 ${total?total+' Link':'Add Evidence'}</button><span class="sub-link">${docs?docs+' Document':''}${docs&&ev?' • ':''}${ev?ev+' Evidence':''}</span></div>`;
+  });
+}
+function openEvidenceLinkModal(spanId,label){
+  const m=document.getElementById('evidenceLinkModal');if(!m)return;
+  m.dataset.spanId=spanId;
+  document.getElementById('evidenceModalSubtitle').textContent=(label||spanId)+' • '+spanId;
+  document.getElementById('evMilestone').innerHTML=V19_MILESTONES.map(x=>`<option>${v19Esc(x)}</option>`).join('');
+  document.getElementById('evUrl').value='';document.getElementById('evNote').value='';
+  document.getElementById('evidenceAddForm').style.display=v19CanEdit()?'':'none';
+  m.style.display='flex';v19RenderEvidence(spanId);
+}
+function closeEvidenceLinkModal(){const m=document.getElementById('evidenceLinkModal');if(m)m.style.display='none'}
+function v19RenderEvidence(spanId){
+  const box=document.getElementById('evidenceLinkList');
+  const docs=v19Load(V19_DOC_KEY).filter(x=>x.spanId===spanId);
+  const ev=v19Load(V19_EVIDENCE_KEY).filter(x=>x.spanId===spanId);
+  let html='';
+  html+=`<div class="evidence-link-card" style="margin-bottom:12px"><div class="ev-head"><div class="ev-title">📁 Document Span — BoQ / ABD / KMZ</div><div class="ev-meta">${docs.length} link</div></div>`;
+  html+=docs.length?docs.map(x=>`<div style="padding:8px 0;border-top:1px solid #eee;display:flex;justify-content:space-between;gap:10px;align-items:center"><div><span class="ev-type-badge">${v19Esc(x.type)}</span><div class="ev-meta" style="margin-top:5px">${v19Esc(x.note||x.url)}</div></div><div class="doc-link-actions"><a class="btn-light" href="${v19Esc(x.url)}" target="_blank" rel="noopener noreferrer">🔗 Open</a>${v19CanEdit()?`<button class="btn-light" onclick="deleteSpanDocumentLink('${v19Esc(x.id)}','${v19Esc(spanId)}');v19RenderEvidence('${v19Esc(spanId)}')">Hapus</button>`:''}</div></div>`).join(''):'<div class="evidence-empty">Belum ada document link.</div>';
+  html+='</div>';
+  const groups={};ev.forEach(x=>(groups[x.milestone]??=[]).push(x));
+  html+=`<div style="font-weight:800;margin:4px 0 8px">📎 Milestone Evidence</div><div class="evidence-link-grid">`;
+  html+=V19_MILESTONES.filter(m=>groups[m]).map(m=>`<div class="evidence-link-card"><div class="ev-head"><div class="ev-title">${v19Esc(m)}</div><div class="ev-meta">${groups[m].length} link</div></div>${groups[m].map(x=>`<div style="padding:8px 0;border-top:1px solid #eee"><div><span class="ev-type-badge">${v19Esc(x.type)}</span> <span class="ev-meta">${v19Esc(x.createdAt)}</span></div><div style="margin-top:7px"><a class="btn-light" href="${v19Esc(x.url)}" target="_blank" rel="noopener noreferrer">🔗 Open Evidence</a>${v19CanEdit()?`<button class="btn-light" style="margin-left:5px" onclick="deleteEvidenceLink('${v19Esc(x.id)}','${v19Esc(spanId)}')">Hapus</button>`:''}</div>${x.note?`<div class="ev-meta" style="margin-top:6px">${v19Esc(x.note)}</div>`:''}</div>`).join('')}</div>`).join('');
+  html+='</div>';
+  box.innerHTML=html;
+}
+function saveEvidenceLink(){
+  if(!v19CanEdit()){alert('Akses Viewer hanya dapat melihat evidence.');return}
+  const m=document.getElementById('evidenceLinkModal'),spanId=m.dataset.spanId,url=document.getElementById('evUrl').value.trim();
+  if(!spanId||!url){alert('Document URL wajib diisi.');return}
+  try{new URL(url)}catch(e){alert('Format URL tidak valid. Gunakan link https://...');return}
+  const a=v19Load(V19_EVIDENCE_KEY),u=v19Session();
+  a.push({id:'EV-'+Date.now().toString(36),spanId,milestone:document.getElementById('evMilestone').value,type:document.getElementById('evType').value,url,note:document.getElementById('evNote').value.trim(),createdAt:new Date().toLocaleString('id-ID'),createdBy:u?.username||'local-user'});
+  v19Save(V19_EVIDENCE_KEY,a);document.getElementById('evUrl').value='';document.getElementById('evNote').value='';
+  v19RenderEvidence(spanId);renderTableDocs();
+}
+function deleteEvidenceLink(id,spanId){if(!v19CanEdit())return;if(!confirm('Hapus evidence link ini?'))return;v19Save(V19_EVIDENCE_KEY,v19Load(V19_EVIDENCE_KEY).filter(x=>x.id!==id));v19RenderEvidence(spanId);renderTableDocs()}
+window.openEvidenceLinkModal=openEvidenceLinkModal;window.closeEvidenceLinkModal=closeEvidenceLinkModal;window.saveEvidenceLink=saveEvidenceLink;window.deleteEvidenceLink=deleteEvidenceLink;window.saveSpanDocumentLink=saveSpanDocumentLink;window.deleteSpanDocumentLink=deleteSpanDocumentLink;window.renderTableDocs=renderTableDocs;window.renderAdminDocs=renderAdminDocs;
+
+/* ========================= V21 SITE PAIR IMPORT ========================= */
+const V21_SPANS_KEY = 'fiberRecoverySpansV21';
+const V21_SEQ_KEY = 'fiberRecoverySpanSeqV21';
+const V21_REQUIRED_HEADERS = [
+  'site id a','site name a','site id b','site name b','region/area','issue / root cause'
+];
+
+let v21PendingRows = [];
+
+function v21User(){ try { return JSON.parse(localStorage.getItem('fiberRecoveryDemoSession') || localStorage.getItem('fiberRecoveryCurrentUser') || 'null'); } catch(e){ return null; } }
+function v21IsSuperUser(){ const u=v21User(); const role=String(u?.role||'').toLowerCase().replace(/[_-]+/g,' '); const username=String(u?.username||u?.email||'').toLowerCase().trim(); return ['super user','superuser','project owner'].includes(role) || ['superuser','super user','project owner'].includes(username) || username.startsWith('superuser@'); }
+function v21Norm(v){ return String(v ?? '').trim(); }
+function v21HeaderNorm(v){ return v21Norm(v).toLowerCase().replace(/\s+/g,' '); }
+
+function v21NextSpanId(){
+  let n = Number(localStorage.getItem(V21_SEQ_KEY) || '0') + 1;
+  localStorage.setItem(V21_SEQ_KEY, String(n));
+  return 'SP-' + String(n).padStart(4,'0');
+}
+function v21GetSpans(){
+  try { return JSON.parse(localStorage.getItem(V21_SPANS_KEY) || '[]'); }
+  catch(e){ return []; }
+}
+function v21SetSpans(rows){
+  localStorage.setItem(V21_SPANS_KEY, JSON.stringify(rows));
+}
+function v21Esc(s){
+  return String(s ?? '').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+function v21OpenImport(){
+  if(!v21IsSuperUser()){
+    alert('Fungsi Generate Span hanya tersedia untuk Super User / Project Owner.');
+    return;
+  }
+  v21PendingRows = [];
+  document.getElementById('v21ImportSummary').textContent = '';
+  document.getElementById('v21ImportPreview').innerHTML = '';
+  document.getElementById('v21GenerateBtn').disabled = true;
+  document.getElementById('v21ImportModal').style.display = 'flex';
+}
+function v21CloseImport(){
+  const m=document.getElementById('v21ImportModal');
+  if(m) m.style.display='none';
+}
+function v21DownloadTemplate(){
+  const csv = [
+    'Site ID A,Site Name A,Site ID B,Site Name B,Region/Area,Issue / Root Cause',
+    '07BNS0101,Oebufu Hub,07BNS0125,Oetete,Area 3,FO Cut',
+    '07BNS0125,Oetete,07BNS0140,Pertamina,Area 3,Link Degradation'
+  ].join('\r\n');
+  const blob = new Blob([csv],{type:'text/csv;charset=utf-8;'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='template_generate_span_fiber_recovery.csv';
+  a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+}
+function v21ReadImportFile(input){
+  const file=input.files?.[0];
+  if(!file) return;
+  const name=file.name.toLowerCase();
+  if(name.endsWith('.csv')){
+    const reader=new FileReader();
+    reader.onload=e=>v21ParseCsv(String(e.target.result||''));
+    reader.readAsText(file);
+  } else {
+    // XLSX parsing is supported when SheetJS is available; otherwise explain clearly.
+    if(window.XLSX){
+      const reader=new FileReader();
+      reader.onload=e=>{
+        try{
+          const wb=XLSX.read(e.target.result,{type:'array'});
+          const ws=wb.Sheets[wb.SheetNames[0]];
+          v21ParseMatrix(XLSX.utils.sheet_to_json(ws,{header:1,defval:''}));
+        }catch(err){ alert('File Excel tidak dapat dibaca: '+err.message); }
+      };
+      reader.readAsArrayBuffer(file);
+    } else {
+      alert('Untuk demo ini, gunakan CSV. Dukungan XLSX akan diaktifkan saat modul import Excel dipasang.');
+    }
+  }
+}
+function v21ParseCsv(csv){
+  const rows=[];
+  let row=[], cell='', quoted=false;
+  for(let i=0;i<csv.length;i++){
+    const ch=csv[i], nx=csv[i+1];
+    if(ch==='"' && quoted && nx==='"'){cell+='"';i++;continue;}
+    if(ch==='"'){quoted=!quoted;continue;}
+    if(ch===',' && !quoted){row.push(cell);cell='';continue;}
+    if((ch==='\n'||ch==='\r')&&!quoted){
+      if(ch==='\r'&&nx==='\n')i++;
+      row.push(cell);cell='';
+      if(row.some(x=>String(x).trim()!==''))rows.push(row);
+      row=[];continue;
+    }
+    cell+=ch;
+  }
+  row.push(cell);
+  if(row.some(x=>String(x).trim()!==''))rows.push(row);
+  v21ParseMatrix(rows);
+}
+function v21ParseMatrix(matrix){
+  if(!matrix?.length){ alert('Template kosong.'); return; }
+  const headers=matrix[0].map(v21HeaderNorm);
+  const idx={};
+  V21_REQUIRED_HEADERS.forEach(h=>idx[h]=headers.indexOf(h));
+  const missing=V21_REQUIRED_HEADERS.filter(h=>idx[h]===-1);
+  if(missing.length){
+    alert('Header belum sesuai template. Kurang: '+missing.join(', '));
+    return;
+  }
+  const data=[];
+  const errors=[];
+  for(let i=1;i<matrix.length;i++){
+    const r=matrix[i];
+    if(!r || r.every(x=>v21Norm(x)==='')) continue;
+    const item={
+      siteIdA:v21Norm(r[idx['site id a']]),
+      siteNameA:v21Norm(r[idx['site name a']]),
+      siteIdB:v21Norm(r[idx['site id b']]),
+      siteNameB:v21Norm(r[idx['site name b']]),
+      region:v21Norm(r[idx['region/area']]),
+      issue:v21Norm(r[idx['issue / root cause']])
+    };
+    const required=['siteIdA','siteNameA','siteIdB','siteNameB','region','issue'];
+    const miss=required.filter(k=>!item[k]);
+    if(miss.length){
+      errors.push(`Baris ${i+1}: field kosong (${miss.join(', ')})`);
+      continue;
+    }
+    data.push(item);
+  }
+  v21PendingRows=data;
+  const sum=document.getElementById('v21ImportSummary');
+  sum.innerHTML=`<b>${data.length}</b> span siap dibuat.`+
+    (errors.length?` <span style="color:#b45309">${errors.length} baris dilewati.</span>`:'');
+  const prev=document.getElementById('v21ImportPreview');
+  prev.innerHTML = data.length ? `
+    <div style="overflow:auto">
+      <table class="v21-import-table">
+        <thead><tr><th>Site ID A / Name A</th><th>Site ID B / Name B</th><th>Region/Area</th><th>Issue / Root Cause</th></tr></thead>
+        <tbody>${data.slice(0,20).map(x=>`
+          <tr>
+            <td><b>${v21Esc(x.siteIdA)}</b><br><span class="muted">${v21Esc(x.siteNameA)}</span></td>
+            <td><b>${v21Esc(x.siteIdB)}</b><br><span class="muted">${v21Esc(x.siteNameB)}</span></td>
+            <td>${v21Esc(x.region)}</td><td>${v21Esc(x.issue)}</td>
+          </tr>`).join('')}</tbody>
+      </table>
+    </div>
+    ${data.length>20?`<div class="muted" style="margin-top:7px">Preview menampilkan 20 baris pertama.</div>`:''}
+    ${errors.length?`<div class="v21-import-errors" style="margin-top:10px">${errors.map(v21Esc).join('<br>')}</div>`:''}
+  ` : `<div class="v21-empty">Tidak ada baris valid.</div>`;
+  document.getElementById('v21GenerateBtn').disabled=!data.length;
+}
+function v21GenerateSpans(){
+  if(!v21IsSuperUser()) return alert('Hanya Super User / Project Owner yang dapat generate span.');
+  if(!v21PendingRows.length) return alert('Belum ada data untuk digenerate.');
+  const existing=v21GetSpans();
+  const now=new Date().toISOString();
+  const created=[];
+  v21PendingRows.forEach(x=>{
+    const id=v21NextSpanId();
+    created.push({
+      id,
+      spanId:id,
+      siteIdA:x.siteIdA, siteNameA:x.siteNameA,
+      siteIdB:x.siteIdB, siteNameB:x.siteNameB,
+      region:x.region,
+      issue:x.issue,
+      rootCause:x.issue,
+      length:0,
+      recovered:0,
+      recoveredLength:0,
+      progress:0,
+      target:'',
+      status:'New / Unclassified',
+      mitra:'',
+      recoveryType:'',
+      parentId:null,
+      children:[],
+      documents:[],
+      evidence:[],
+      createdAt:now,
+      createdBy:v21User()?.username || v21User()?.email || 'super-user'
+    });
+  });
+  v21SetSpans(existing.concat(created));
+  data=v21GetSpans();
+  populateGlobalMitraFilter();
+  initAdmin();
+  v21PendingRows=[];
+  document.getElementById('v21GenerateBtn').disabled=true;
+  document.getElementById('v21ImportSummary').innerHTML=
+    `<b>${created.length} span berhasil dibuat.</b> Status awal: New / Unclassified.`;
+  document.getElementById('v21ImportPreview').innerHTML=
+    `<div class="v21-empty">Span sudah masuk ke dashboard.</div>`;
+  // Best-effort refresh hooks for the existing dashboard.
+  ['renderDashboard','renderAll','renderTable','refreshDashboard','render'].forEach(fn=>{
+    try{ if(typeof window[fn]==='function') window[fn](); }catch(e){}
+  });
+}
+/* Display helper for the new Site A/B format. */
+function v21SitePairHtml(id,name){
+  return `<div class="v21-site-pair"><div class="site-id">${v21Esc(id)}</div><div class="site-name">${v21Esc(name)}</div></div>`;
+}
+window.v21OpenImport=v21OpenImport;
+window.v21CloseImport=v21CloseImport;
+window.v21DownloadTemplate=v21DownloadTemplate;
+window.v21ReadImportFile=v21ReadImportFile;
+window.v21GenerateSpans=v21GenerateSpans;
+window.v21SitePairHtml=v21SitePairHtml;
+/* ====================================================================== */
+
+
+/* V22 integration: generated spans are written into the dashboard's live data model. */
+window.v21GenerateSpans = function(){
+  if(!v21IsSuperUser()) return alert('Hanya Super User / Project Owner yang dapat generate span.');
+  if(!v21PendingRows.length) return alert('Belum ada data untuk digenerate.');
+  const now=new Date().toISOString();
+  const existing=Array.isArray(window.data)?window.data:[];
+  const created=v21PendingRows.map(x=>({
+    id:v21NextSpanId(), spanId:'', siteA:x.siteIdA, siteNameA:x.siteNameA, siteIdA:x.siteIdA,
+    siteB:x.siteIdB, siteNameB:x.siteNameB, siteIdB:x.siteIdB, region:x.region, area:x.region,
+    length:0, recovered:0, recoveredLength:0, progress:0, target:'', status:'New / Unclassified',
+    recoveryType:'', mitra:'', issue:x.issue, rootCause:x.issue, parentId:null, children:[], milestones:{},
+    documents:[], evidence:[], createdAt:now, createdBy:v21User()?.username||'Project Owner'
+  }));
+  created.forEach(x=>x.spanId=x.id);
+  window.data=existing.concat(created);
+  try{ localStorage.setItem('fiberRecoveryDemoData',JSON.stringify(window.data)); }catch(e){}
+  v21PendingRows=[];
+  document.getElementById('v21GenerateBtn').disabled=true;
+  document.getElementById('v21ImportSummary').innerHTML='<b>'+created.length+' span berhasil dibuat.</b> Dashboard sudah diperbarui.';
+  document.getElementById('v21ImportPreview').innerHTML='<div class="v21-empty">'+created.length+' span berhasil masuk ke Fiber Recovery Table.</div>';
+  try{ populateGlobalMitraFilter(); initAdmin(); update(); }catch(e){ console.error(e); }
+};
+
+// Keep main table compatible with legacy Site A/Site B data while displaying ID + Name.\n
+function v22ApplySuperUserButton(){ const b=document.getElementById('v22GenerateSpanBtn'); if(b) b.style.display=v21IsSuperUser()?'inline-flex':'none'; }
+setTimeout(v22ApplySuperUserButton,100); setInterval(v22ApplySuperUserButton,1000);
+
+/* V23 — Super User login compatibility fix */
+(function(){
+  const V23_USERS = [
+    {username:'superuser', password:'super123', role:'super_user', displayName:'Project Owner / Super User'},
+    {username:'super user', password:'super123', role:'super_user', displayName:'Project Owner / Super User'},
+    {username:'super_user', password:'super123', role:'super_user', displayName:'Project Owner / Super User'},
+    {username:'viewer', password:'viewer123', role:'viewer', displayName:'Viewer'},
+    {username:'operator', password:'operator123', role:'updater', displayName:'Operator'}
+  ];
+
+  function v23FindLoginInputs(){
+    const user = document.querySelector(
+      '#username,#loginUsername,#loginUser,#email,input[name="username"],input[name="user"],input[type="text"]'
+    );
+    const pass = document.querySelector(
+      '#password,#loginPassword,input[name="password"],input[type="password"]'
+    );
+    return {user,pass};
+  }
+
+  function v23SetCurrentUser(u){
+    localStorage.setItem('fiberRecoveryCurrentUser', JSON.stringify({
+      username:u.username,
+      role:u.role,
+      displayName:u.displayName,
+      email:u.username
+    }));
+  }
+
+  window.v23TryLocalLogin = function(ev){
+    if(ev) ev.preventDefault();
+    const {user,pass}=v23FindLoginInputs();
+    const username=String(user?.value||'').trim().toLowerCase();
+    const password=String(pass?.value||'');
+    const found=V23_USERS.find(x=>x.username.toLowerCase()===username && x.password===password);
+    if(!found){
+      alert('Username atau password salah.\\n\\nSuper User: superuser\\nPassword: super123');
+      return false;
+    }
+    v23SetCurrentUser(found);
+
+    // Hide common login containers.
+    ['loginScreen','loginModal','loginPage','loginOverlay'].forEach(id=>{
+      const el=document.getElementById(id);
+      if(el) el.style.display='none';
+    });
+
+    // Show dashboard/main containers where available.
+    ['app','appContainer','dashboard','mainApp'].forEach(id=>{
+      const el=document.getElementById(id);
+      if(el) el.style.display='';
+    });
+
+    // Re-run role/UI hooks from the existing dashboard.
+    ['updateUIForRole','applyRoleAccess','renderDashboard','renderAll','refreshDashboard','render'].forEach(fn=>{
+      try{ if(typeof window[fn]==='function') window[fn](); }catch(e){}
+    });
+
+    document.dispatchEvent(new CustomEvent('v23-login-success',{detail:found}));
+    return false;
+  };
+
+  function v23WireLogin(){
+    const {user,pass}=v23FindLoginInputs();
+    if(!user || !pass) return;
+    user.type='text';
+    user.setAttribute('autocomplete','username');
+    pass.setAttribute('autocomplete','current-password');
+
+    const forms=document.querySelectorAll('form');
+    forms.forEach(form=>{
+      const txt=(form.innerText||'').toLowerCase();
+      if(txt.includes('login') || txt.includes('masuk') || form.querySelector('input[type="password"]')){
+        if(form.dataset.v23Wired==='1') return;
+        form.dataset.v23Wired='1';
+        form.addEventListener('submit',window.v23TryLocalLogin,true);
+      }
+    });
+
+    // Also intercept common login button clicks.
+    document.querySelectorAll('button').forEach(btn=>{
+      if(btn.dataset.v23Wired==='1') return;
+      const t=(btn.textContent||'').trim().toLowerCase();
+      if(['login','masuk','sign in'].includes(t)){
+        btn.dataset.v23Wired='1';
+        btn.addEventListener('click',window.v23TryLocalLogin,true);
+      }
+    });
+  }
+
+  window.addEventListener('DOMContentLoaded',()=>{
+    setTimeout(v23WireLogin,50);
+    setTimeout(v23WireLogin,500);
+    setTimeout(v23WireLogin,1500);
+  });
+
+  // Expose credentials in a small local-demo hint if the page has a login help area.
+  window.V23_LOCAL_USERS=V23_USERS;
+})();
+
+</script>
+
+<div id="evidenceLinkModal" class="modal" style="display:none">
+<div class="modal-content" style="max-width:760px">
+<div class="modal-header"><div><div style="font-size:18px;font-weight:800">Evidence &amp; Document</div><div id="evidenceModalSubtitle" class="muted"></div></div><button type="button" class="btn btn-secondary" onclick="closeEvidenceLinkModal()">✕</button></div>
+<div id="evidenceLinkList" style="margin:14px 0"></div>
+<div id="evidenceAddForm" style="border-top:1px solid #e5e7eb;padding-top:14px">
+<div style="font-weight:800;margin-bottom:10px">Tambah Evidence / Document Link</div>
+<div class="form-grid">
+<label>Milestone<select id="evMilestone"></select></label>
+<label>Jenis Evidence<select id="evType"><option>Foto Before</option><option>Foto During</option><option>Foto After</option><option>BoQ / Engineering</option><option>Material Evidence</option><option>Manpower Evidence</option><option>OTDR</option><option>OPM</option><option>Berita Acara / Acceptance</option><option>Other</option></select></label>
+<label style="grid-column:1/-1">Document URL<input id="evUrl" type="url" placeholder="https://drive.google.com/..."></label>
+<label style="grid-column:1/-1">Catatan<input id="evNote" type="text" placeholder="Opsional"></label>
+</div><div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px"><button type="button" class="btn btn-secondary" onclick="closeEvidenceLinkModal()">Tutup</button><button type="button" class="btn btn-primary" onclick="saveEvidenceLink()">Simpan Link</button></div></div></div></div>
+
+
+
+<!-- V30 Smart Upload — polished proportional modal -->
+<div id="v21ImportModal" class="modal" style="display:none">
+  <div class="v30-upload-modal">
+    <div class="v30-upload-hero">
+      <div class="v30-hero-copy">
+        <div class="v30-hero-title">
+          <span class="v30-upload-icon">↥</span>
+          <div>
+            <div>Upload Data — Smart Data Reader</div>
+            <div class="v30-hero-sub">Super User / Project Owner</div>
+          </div>
+        </div>
+        <div class="v30-hero-description">
+          Upload file Excel/CSV. Dashboard akan membaca struktur kolom secara otomatis
+          dan mencocokkan dengan field yang relevan.
+        </div>
+      </div>
+      <button type="button" class="v30-close" onclick="smartCloseUpload()" aria-label="Tutup">×</button>
+    </div>
+
+    <div class="v30-body">
+      <div class="v30-steps">
+        <div class="v30-step active"><span>1</span><b>Pilih File</b></div>
+        <div class="v30-step-line"></div>
+        <div class="v30-step"><span>2</span><b>Deteksi Kolom</b></div>
+        <div class="v30-step-line"></div>
+        <div class="v30-step"><span>3</span><b>Preview Data</b></div>
+        <div class="v30-step-line"></div>
+        <div class="v30-step"><span>4</span><b>Import</b></div>
+      </div>
+
+      <div class="v30-upload-grid">
+        <div class="v30-dropzone" id="v30Dropzone">
+          <div class="v30-cloud">↑</div>
+          <div class="v30-drop-title">Pilih atau seret file Excel/CSV ke sini</div>
+          <div class="v30-drop-sub">
+            Kami mendukung file dengan berbagai format kolom.<br>
+            Tidak perlu menggunakan template khusus.
+          </div>
+          <label class="v30-pick-btn">
+            <span>□</span> Pilih File
+            <input id="v21ImportFile" type="file" accept=".csv,.xlsx,.xls" onchange="smartReadUpload(this)">
+          </label>
+          <div class="v30-file-note">Format: .xlsx, .xls, .csv &nbsp;•&nbsp; Maksimal 50 MB</div>
+          <div id="smartFileInfo" class="v30-file-info"></div>
+        </div>
+
+        <div class="v30-example-card">
+          <div class="v30-section-title">Contoh format yang dapat dibaca</div>
+          <div class="v30-example-row">
+            <span class="v30-example-icon excel">X</span>
+            <b>Data Span</b>
+            <span>Site A, Site B, Region, Length, RCA, Mitra, Status, Target, ...</span>
+          </div>
+          <div class="v30-example-row">
+            <span class="v30-example-icon docs">▤</span>
+            <b>Timely Report</b>
+            <span>TT No, Site A, Site B, Issue, Root Cause, Region, Mitra, ...</span>
+          </div>
+          <div class="v30-example-row">
+            <span class="v30-example-icon boq">▤</span>
+            <b>BoQ / ABD / KMZ</b>
+            <span>Site ID, Site Name, Panjang (Km), Area, Folder, ...</span>
+          </div>
+          <div class="v30-example-row">
+            <span class="v30-example-icon other">≡</span>
+            <b>Format Lainnya</b>
+            <span>Dashboard akan mendeteksi kolom yang relevan secara otomatis.</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="v30-smart-note">
+        <div class="v30-note-icon">💡</div>
+        <div>
+          <b>Smart Data Reader</b>
+          <div>
+            Dashboard akan mengenali kolom seperti Site A, Site B, Region/Area,
+            Issue/Root Cause, Length, Mitra/Subcont, Target, dan field lain yang tersedia.
+            Anda hanya perlu memastikan file memiliki header kolom.
+          </div>
+        </div>
+      </div>
+
+      <div id="v21ImportSummary" class="v30-summary"></div>
+      <div id="smartMapping" class="v30-mapping"></div>
+      <div id="v21ImportPreview" class="v30-preview"></div>
+    </div>
+
+    <div class="v30-footer">
+      <button class="v30-btn v30-btn-light" type="button" onclick="smartClearUpload()">↶ &nbsp; Reset</button>
+      <div class="v30-footer-right">
+        <button class="v30-btn v30-btn-light" type="button" onclick="smartCloseUpload()">Tutup</button>
+        <button class="v30-btn v30-btn-primary" type="button" id="v21GenerateBtn" onclick="smartCommitUpload()" disabled>
+          Masukkan ke Dashboard &nbsp;→
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+
+<script>
+/* V31 LIVE MODE — Supabase Auth + PostgreSQL-backed data.
+   Uses only the Supabase publishable key in the browser. RLS is enforced in PostgreSQL.
+*/
+const LIVE_SUPABASE_URL = 'https://eixehtqgwlztnwygqlsw.supabase.co';
+const LIVE_SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_wLF9Kam9cxVEbVsXkRg3KA_9ccGRjrZ';
+const liveSupabase = window.supabase.createClient(LIVE_SUPABASE_URL, LIVE_SUPABASE_PUBLISHABLE_KEY, {
+  auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}
+});
+let liveProfile = null;
+let liveEvidenceCache = [];
+let liveDocumentCache = [];
+let liveMilestoneCache = [];
+let smartRows = [];
+let smartMapping = {};
+let smartHeaders = [];
+let smartErrors = [];
+let smartFileName = '';
+
+function liveSetStatus(text,ok=false){
+  const el=document.getElementById('dbStatus');
+  if(el){el.textContent=text;el.style.background=ok?'#e5f5e9':'#fff2d9';el.style.color=ok?'#258344':'#9b680b';}
+}
+function liveRoleKey(role){return String(role||'viewer').toLowerCase().replace(/[\s-]+/g,'_');}
+function liveIsSuperUser(){return ['super_user','superuser','project_owner'].includes(liveRoleKey(session?.role||liveProfile?.role));}
+function liveCanUpdate(){return !!session && ['super_user','mitra_admin','updater'].includes(liveRoleKey(session.role));}
+function liveCanEditSpan(x){
+  if(!session)return false;
+  const role=liveRoleKey(session.role);
+  if(['super_user','updater'].includes(role))return true;
+  if(role==='mitra_admin')return String(x?.mitra||'').trim().toLowerCase()===String(session.mitra||'').trim().toLowerCase();
+  return false;
+}
+function v21User(){return session||null;}
+function v21IsSuperUser(){return liveIsSuperUser();}
+function v19Session(){return session||null;}
+function v19CanEdit(){return liveCanUpdate();}
+function canUpdate(){return liveCanUpdate();}
+
+async function liveFetchProfile(user){
+  const {data:profile,error}=await liveSupabase.from('profiles')
+    .select('id,display_name,role,mitra_subcont').eq('id',user.id).single();
+  if(error)throw error;
+  const role=liveRoleKey(profile.role);
+  if(!['super_user','mitra_admin','viewer','updater'].includes(role)){
+    throw new Error('Privilege akun belum valid. Hubungi Project Owner.');
+  }
+  liveProfile=profile;
+  return {
+    userId:user.id,email:user.email,username:profile.display_name||user.email,
+    displayName:profile.display_name||user.email,role,privilege:role.toUpperCase(),
+    mitra:profile.mitra_subcont||'',canUpdate:['super_user','mitra_admin','updater'].includes(role)
+  };
+}
+async function login(e){
+  if(e){e.preventDefault();e.stopPropagation();}
+  const email=String(document.getElementById('loginUser')?.value||'').trim().toLowerCase();
+  const password=String(document.getElementById('loginPass')?.value||'');
+  const err=document.getElementById('loginError'); if(err)err.textContent='';
+  if(!email||!password){if(err)err.textContent='Email dan password wajib diisi.';return false;}
+  liveSetStatus('Menghubungkan ke Supabase…');
+  try{
+    const {data,error}=await liveSupabase.auth.signInWithPassword({email,password});
+    if(error)throw error;
+    session=await liveFetchProfile(data.user);
+    await liveAfterLogin();
+    return false;
+  }catch(ex){
+    if(err)err.textContent=ex?.message||'Login gagal. Periksa akun dan konfigurasi Supabase.';
+    liveSetStatus('Login gagal');
+    return false;
+  }
+}
+window.login=login;
+
+function applySession(){
+  if(!session)return;
+  const screen=document.getElementById('loginScreen'); if(screen)screen.style.display='none';
+  const su=document.getElementById('sessionUser'); if(su)su.textContent=session.username||session.email;
+  const sr=document.getElementById('sessionRole');
+  if(sr){sr.textContent=(session.role==='super_user'?'Super User':session.role==='mitra_admin'?'Mitra Admin':session.role==='updater'?'Updater':'Viewer')+(session.mitra?' · '+session.mitra:'');sr.className='role-badge '+(session.canUpdate?'updater':'viewer');}
+  document.querySelectorAll('.updater-only').forEach(el=>el.style.display=session.canUpdate?'':'none');
+  const upload=document.getElementById('v22GenerateSpanBtn');
+  if(upload)upload.style.display=liveIsSuperUser()?'inline-flex':'none';
+  const badge=document.getElementById('accessPrivilegePreview');
+  if(badge)badge.textContent='Live access • '+session.role+(session.mitra?' • '+session.mitra:'');
+  closeEditor();
+}
+async function liveAfterLogin(){
+  applySession();
+  await loadStoredData();
+  populateGlobalMitraFilter();
+  initAdmin();
+  update();
+  liveSetStatus('Supabase Connected',true);
+}
+async function logout(){
+  await liveSupabase.auth.signOut();
+  session=null;liveProfile=null;
+  data=[];
+  const screen=document.getElementById('loginScreen');if(screen)screen.style.display='flex';
+  const email=document.getElementById('loginUser');if(email)email.value='';
+  const pass=document.getElementById('loginPass');if(pass)pass.value='';
+  const err=document.getElementById('loginError');if(err)err.textContent='';
+  liveSetStatus('Signed out');
+  populateGlobalMitraFilter();initAdmin();update();
+}
+window.logout=logout;
+
+async function auditLog(message){
+  if(!session?.userId)return;
+  const {error}=await liveSupabase.from('audit_logs').insert({user_id:session.userId,message});
+  if(error)console.warn('Audit log:',error.message);
+}
+
+async function loadStoredData(){
+  if(!session){data=[];return;}
+  liveSetStatus('Memuat data Supabase…');
+  const {data:rows,error}=await liveSupabase.from('recovery_spans').select('*').order('created_at',{ascending:true});
+  if(error){data=[];liveSetStatus('Gagal memuat span: '+error.message);console.error(error);return;}
+  data=(rows||[]).map(r=>({
+    id:r.id,parentId:r.parent_id||undefined,spanRole:r.span_role||'standalone',
+    siteIdA:r.site_id_a||'',siteNameA:r.site_name_a||'',
+    siteIdB:r.site_id_b||'',siteNameB:r.site_name_b||'',
+    siteA:r.site_id_a ? r.site_id_a : (r.site_a||''),
+    siteB:r.site_id_b ? r.site_id_b : (r.site_b||''),
+    region:r.region||'',area:r.region||'',length:Number(r.length_km||0),
+    recovered:Number(r.recovered_km||0),progress:Number(r.progress_pct||0),
+    recoveryType:r.recovery_type||'',target:r.target_date||'',
+    status:r.status||'On Track',quality:r.quality||'Green',
+    issue:r.issue_root_cause||'',rootCause:r.issue_root_cause||'',
+    mitra:r.mitra_subcont||'',milestones:{},
+    lat:r.lat,lng:r.lng,lat2:r.lat2,lng2:r.lng2,
+    createdAt:r.created_at,updatedAt:r.updated_at
+  }));
+  const ids=data.map(x=>x.id);
+  liveMilestoneCache=[];liveEvidenceCache=[];liveDocumentCache=[];
+  if(ids.length){
+    const [msRes,evRes]=await Promise.all([
+      liveSupabase.from('span_milestones').select('*').in('span_id',ids),
+      liveSupabase.from('span_evidence').select('*').in('span_id',ids)
+    ]);
+    if(!msRes.error){
+      liveMilestoneCache=msRes.data||[];
+      liveMilestoneCache.forEach(r=>{
+        const x=data.find(v=>v.id===r.span_id);if(!x)return;
+        x.milestones[r.milestone_key]={plan:r.plan_date||'',actual:r.actual_date||'',status:r.status||'Plan'};
+      });
+    } else if(msRes.error.code!=='42P01') console.warn('Milestones:',msRes.error.message);
+    if(!evRes.error){
+      const all=evRes.data||[];
+      liveDocumentCache=all.filter(x=>x.kind==='document').map(liveEvidenceToUI);
+      liveEvidenceCache=all.filter(x=>x.kind==='evidence').map(liveEvidenceToUI);
+    } else if(evRes.error.code!=='42P01') console.warn('Evidence links:',evRes.error.message);
+  }
+  document.getElementById('lastUpdate').textContent='Live data • '+data.length+' span • '+new Date().toLocaleString('id-ID');
+  liveSetStatus('Supabase Connected',true);
+}
+function liveEvidenceToUI(r){
+  return {id:r.id,spanId:r.span_id,kind:r.kind,milestone:r.milestone_key||'',type:r.document_type||'Other',
+    url:r.url,note:r.note||'',createdAt:r.created_at||'',createdBy:r.created_by||''};
+}
+function liveUiToDb(x,kind){
+  return {span_id:x.spanId,kind,milestone_key:x.milestone||null,document_type:x.type||'Other',
+    url:x.url,note:x.note||null,created_by:session?.userId||null};
+}
+
+async function saveAdminSpan(){
+  if(!liveCanUpdate()){alert('Akses ditolak.');return;}
+  const id=adminEditingId||document.getElementById('adminSpan').value;
+  const x=data.find(v=>v.id===id);if(!x)return;
+  if(!liveCanEditSpan(x)){alert('Akses ditolak: span ini bukan milik Mitra Anda.');return;}
+  const role=document.getElementById('adminRole').value;
+  const newParentId=document.getElementById('adminParentSelect').value||null;
+  const oldParentId=x.parentId||null;
+  if(role==='child'&&childrenOf(id).length){alert('Span yang memiliki child tidak dapat dijadikan child.');return;}
+  if(role==='child'&&(!newParentId||newParentId===id)){alert('Pilih Parent Span yang valid.');return;}
+  if(role==='child'){x.parentId=newParentId;x.spanRole='child';}else{delete x.parentId;x.spanRole=role;}
+  const oldParent=oldParentId?data.find(v=>v.id===oldParentId):null;
+  const children=childrenOf(id);const aggregated=role==='parent'&&children.length>0;
+  if(aggregated){const a=aggregateParent(x);x.length=a.length;x.recovered=a.recovered;x.progress=a.progress;}
+  else{
+    x.length=Math.max(0,Number(document.getElementById('adminLength').value)||0);
+    x.recovered=Math.min(x.length,Math.max(0,Number(document.getElementById('adminRecovered').value)||0));
+    x.progress=Math.min(100,Math.max(0,Number(document.getElementById('adminProgress').value)||0));
+  }
+  x.status=document.getElementById('adminStatus').value;
+  x.mitra=document.getElementById('adminPIC').value.trim();
+  x.recoveryType=document.getElementById('adminRecoveryType').value;
+  x.target=document.getElementById('adminTarget').value||null;
+  x.issue=document.getElementById('adminIssue').value;
+  if(oldParent&&oldParent.id!==newParentId){
+    const oldKids=childrenOf(oldParent.id);
+    if(oldKids.length){const a=aggregateParent(oldParent);oldParent.length=a.length;oldParent.recovered=a.recovered;oldParent.progress=a.progress;}
+    else oldParent.spanRole='standalone';
+  }
+  const payload={
+    parent_id:x.parentId||null,span_role:x.spanRole,
+    site_a:[x.siteIdA||x.siteA,x.siteNameA].filter(Boolean).join(' — '),
+    site_b:[x.siteIdB||x.siteB,x.siteNameB].filter(Boolean).join(' — '),
+    site_id_a:x.siteIdA||x.siteA||'',site_name_a:x.siteNameA||'',
+    site_id_b:x.siteIdB||x.siteB||'',site_name_b:x.siteNameB||'',
+    region:x.region||'Unclassified',length_km:x.length,recovered_km:x.recovered,
+    progress_pct:x.progress,recovery_type:x.recoveryType||null,target_date:x.target||null,
+    status:['On Track','Watch','Critical','New / Unclassified'].includes(x.status)?x.status:'On Track',
+    quality:x.quality||'Green',issue_root_cause:x.issue||null,mitra_subcont:x.mitra||null,
+    updated_by:session.userId
+  };
+  const {error}=await liveSupabase.from('recovery_spans').update(payload).eq('id',id);
+  if(error){alert('Gagal menyimpan ke Supabase: '+error.message);return;}
+  if(newParentId){
+    const p=data.find(v=>v.id===newParentId);
+    if(p){p.spanRole='parent';const a=aggregateParent(p);
+      const res=await liveSupabase.from('recovery_spans').update({span_role:'parent',length_km:a.length,recovered_km:a.recovered,progress_pct:a.progress,updated_by:session.userId}).eq('id',p.id);
+      if(res.error)console.warn(res.error.message);
+    }
+  }
+  await auditLog('Update span '+id+' / role '+role+' / parent '+(newParentId||'-'));
+  await loadStoredData();populateGlobalMitraFilter();initAdmin();update();openEditor(id);
+  alert('Update span tersimpan di Supabase.');
+}
+async function saveMilestoneFocus(){
+  if(!liveCanUpdate()){alert('Akses ditolak.');return;}
+  const x=data.find(v=>v.id===focusSpanId);if(!x)return;
+  if(!liveCanEditSpan(x)){alert('Akses ditolak: span ini bukan milik Mitra Anda.');return;}
+  let plan=document.getElementById('focusPlan').value;
+  let actual=document.getElementById('focusActual').value;
+  const status=document.getElementById('focusStatus').value;
+  if(status==='Done'&&!actual)actual=plan;
+  const {error}=await liveSupabase.from('span_milestones').upsert({
+    span_id:x.id,milestone_key:focusMilestoneKey,plan_date:plan||null,actual_date:actual||null,
+    status,updated_by:session.userId
+  },{onConflict:'span_id,milestone_key'});
+  if(error){alert('Gagal menyimpan milestone: '+error.message);return;}
+  await auditLog('Milestone '+focusMilestoneKey+' on '+x.id+' -> '+status);
+  await loadStoredData();update();closeMilestoneEditor();
+}
+window.saveAdminSpan=saveAdminSpan;
+window.saveMilestoneFocus=saveMilestoneFocus;
+
+function smartOpenUpload(){
+  if(!liveIsSuperUser()){alert('Upload Data hanya tersedia untuk Super User / Project Owner.');return;}
+  smartClearUpload();
+  const modal=document.getElementById('v21ImportModal');
+  if(modal){modal.style.display='flex';document.body.style.overflow='hidden';}
+}
+function smartCloseUpload(){
+  const modal=document.getElementById('v21ImportModal');if(modal)modal.style.display='none';
+  document.body.style.overflow='';
+}
+function smartClearUpload(){
+  smartRows=[];smartMapping={};smartHeaders=[];smartErrors=[];smartFileName='';
+  const input=document.getElementById('v21ImportFile');if(input)input.value='';
+  ['smartFileInfo','v21ImportSummary','smartMapping','v21ImportPreview'].forEach(id=>{const el=document.getElementById(id);if(el)el.innerHTML='';});
+  const btn=document.getElementById('v21GenerateBtn');if(btn)btn.disabled=true;
+}
+function smartEsc(v){return String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
+function smartNorm(v){return String(v??'').trim().toLowerCase().replace(/[\r\n]+/g,' ').replace(/[()_.-]+/g,' ').replace(/\s+/g,' ');}
+function smartParseCsv(text){
+  const rows=[];let row=[],cell='',quoted=false;
+  for(let i=0;i<text.length;i++){const c=text[i],n=text[i+1];
+    if(c==='"'){if(quoted&&n==='"'){cell+='"';i++;}else quoted=!quoted;}
+    else if(c===','&&!quoted){row.push(cell);cell='';}
+    else if((c==='\n'||c==='\r')&&!quoted){if(c==='\r'&&n==='\n')i++;row.push(cell);cell='';if(row.some(v=>String(v).trim()))rows.push(row);row=[];}
+    else cell+=c;
+  }
+  row.push(cell);if(row.some(v=>String(v).trim()))rows.push(row);return rows;
+}
+const SMART_ALIASES={
+  siteIdA:['site id a','site a id','source site id','from site id','site id 1','node a id'],
+  siteNameA:['site name a','site a name','source site name','from site name','site name 1','node a name'],
+  siteIdB:['site id b','site b id','destination site id','dest site id','to site id','site id 2','node b id'],
+  siteNameB:['site name b','site b name','destination site name','dest site name','to site name','site name 2','node b name'],
+  region:['region area','region','area','cluster','zone','regional'],
+  issue:['issue root cause','root cause','rootcause','issue','problem','remarks','remark','rfo','description'],
+  length:['length km','length','km','panjang','panjang km','span length','cable length','jarak','distance'],
+  recovered:['recovered length','recovered km','recovered','realized length'],
+  progress:['progress','progress pct','completion','completion pct'],
+  status:['recovery status','status','condition'],
+  mitra:['mitra subcont','mitra','subcont','subcontractor','vendor','partner'],
+  recoveryType:['recovery type','jenis recovery','jenis pekerjaan'],
+  target:['target completion','target date','target','due date','planned date'],
+  parentId:['parent span id','parent span','parent id']
+};
+function smartDetect(headers){
+  const m={},used=new Set();
+  for(const key of Object.keys(SMART_ALIASES)){
+    let best={i:-1,s:0};
+    headers.forEach((h,i)=>{
+      if(used.has(i))return;
+      const hn=smartNorm(h);
+      SMART_ALIASES[key].forEach(a=>{
+        const an=smartNorm(a);let score=hn===an?100:(hn.includes(an)||an.includes(hn)?75:0);
+        if(score>best.s)best={i,s:score};
+      });
+    });
+    if(best.i>=0&&best.s>=55){m[key]={index:best.i,header:headers[best.i],score:best.s};used.add(best.i);}
+  }
+  ['A','B'].forEach(letter=>{
+    const k='sitePair'+letter;
+    const i=headers.findIndex(h=>new RegExp('^site\\s*'+letter+'$','i').test(String(h).trim()));
+    if(i>=0)m[k]={index:i,header:headers[i],score:80};
+  });
+  return m;
+}
+function smartSplitSite(v){
+  const s=String(v??'').trim();if(!s)return{id:'',name:''};
+  const parts=s.split(/\s*[|/]\s*|\s+—\s+|\s+-\s+|\s*;\s*/);
+  if(parts.length>1)return{id:parts[0].trim(),name:parts.slice(1).join(' / ').trim()};
+  const i=s.indexOf('_');if(i>0)return{id:s.slice(0,i).trim(),name:s.slice(i+1).replace(/_/g,' ').trim()};
+  return{id:s,name:''};
+}
+function smartTable(arr){
+  if(!arr||arr.length<2)return{headers:[],rows:[]};
+  const headers=arr[0].map((v,i)=>String(v??'').trim()||('Column '+(i+1)));
+  const rows=arr.slice(1).filter(r=>r.some(v=>String(v??'').trim()));
+  return{headers,rows};
+}
+function smartReadUpload(input){
+  const file=input?.files?.[0];if(!file)return;
+  smartFileName=file.name;
+  const info=document.getElementById('smartFileInfo');if(info)info.textContent=file.name+' • '+Math.round(file.size/1024)+' KB';
+  if(file.size>50*1024*1024){alert('Ukuran file maksimal 50 MB.');return;}
+  const ext=file.name.toLowerCase().split('.').pop();
+  const parse=arr=>smartProcessTable(smartTable(arr));
+  if(ext==='csv'){
+    const reader=new FileReader();reader.onload=e=>parse(smartParseCsv(String(e.target.result||'').replace(/^\uFEFF/,'')));reader.readAsText(file);
+  }else if(['xlsx','xls'].includes(ext)&&window.XLSX){
+    const reader=new FileReader();reader.onload=e=>{
+      try{const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array'});const ws=wb.Sheets[wb.SheetNames[0]];parse(XLSX.utils.sheet_to_json(ws,{header:1,defval:''}));}
+      catch(err){alert('File Excel tidak dapat dibaca: '+err.message);}
+    };reader.readAsArrayBuffer(file);
+  }else alert('Format file tidak didukung. Gunakan CSV, XLS atau XLSX.');
+}
+function smartProcessTable(tbl){
+  smartHeaders=tbl.headers;smartMapping=smartDetect(tbl.headers);smartErrors=[];
+  const get=(r,k)=>smartMapping[k]?String(r[smartMapping[k].index]??'').trim():'';
+  smartRows=tbl.rows.map((r,i)=>{
+    let a={id:get(r,'siteIdA'),name:get(r,'siteNameA')},b={id:get(r,'siteIdB'),name:get(r,'siteNameB')};
+    if(!a.id&&smartMapping.sitePairA)a=smartSplitSite(r[smartMapping.sitePairA.index]);
+    if(!b.id&&smartMapping.sitePairB)b=smartSplitSite(r[smartMapping.sitePairB.index]);
+    if(!a.id||!b.id)smartErrors.push('Baris '+(i+2)+': Site A/B belum terbaca.');
+    return {siteIdA:a.id,siteNameA:a.name,siteIdB:b.id,siteNameB:b.name,region:get(r,'region'),issue:get(r,'issue'),
+      length:get(r,'length'),recovered:get(r,'recovered'),progress:get(r,'progress'),status:get(r,'status'),
+      mitra:get(r,'mitra'),recoveryType:get(r,'recoveryType'),target:get(r,'target'),parentId:get(r,'parentId')};
+  }).filter(r=>r.siteIdA&&r.siteIdB);
+  const mapLabels=[['siteIdA','Site ID A'],['siteNameA','Site Name A'],['siteIdB','Site ID B'],['siteNameB','Site Name B'],['region','Region/Area'],['issue','Issue / Root Cause'],['length','Length'],['recovered','Recovered'],['progress','Progress'],['status','Status'],['mitra','Mitra/Subcont'],['recoveryType','Recovery Type'],['target','Target'],['parentId','Parent Span']];
+  const mapEl=document.getElementById('smartMapping');
+  if(mapEl)mapEl.innerHTML='<div style="font-weight:800;margin-bottom:7px">Detected Column Mapping</div><div style="overflow:auto"><table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr><th>Field Dashboard</th><th>Kolom File</th><th>Confidence</th></tr></thead><tbody>'+mapLabels.map(([k,l])=>'<tr><td>'+l+'</td><td>'+(smartMapping[k]?smartEsc(smartMapping[k].header):'<span style="color:#9aa5b1">Tidak ditemukan</span>')+'</td><td>'+(smartMapping[k]?smartMapping[k].score+'%':'—')+'</td></tr>').join('')+'</tbody></table></div>';
+  const sum=document.getElementById('v21ImportSummary');
+  if(sum)sum.innerHTML=smartRows.length?'<b>'+smartRows.length+' baris siap diproses.</b> '+smartHeaders.length+' kolom terdeteksi.':'<span style="color:#b42318">Tidak ada baris valid. Pastikan header Site A dan Site B terbaca.</span>';
+  const preview=document.getElementById('v21ImportPreview');
+  if(preview)preview.innerHTML=smartRows.length?'<div style="font-weight:800;margin-bottom:7px">Preview Data</div><div style="overflow:auto;max-height:220px"><table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr><th>Site A</th><th>Site B</th><th>Region</th><th>Issue / Root Cause</th><th>Length</th><th>Mitra</th></tr></thead><tbody>'+smartRows.slice(0,12).map(r=>'<tr><td><b>'+smartEsc(r.siteIdA)+'</b><br>'+smartEsc(r.siteNameA)+'</td><td><b>'+smartEsc(r.siteIdB)+'</b><br>'+smartEsc(r.siteNameB)+'</td><td>'+smartEsc(r.region)+'</td><td>'+smartEsc(r.issue)+'</td><td>'+smartEsc(r.length)+'</td><td>'+smartEsc(r.mitra)+'</td></tr>').join('')+'</tbody></table></div>':'';
+  const btn=document.getElementById('v21GenerateBtn');if(btn)btn.disabled=!smartRows.length||!liveIsSuperUser();
+}
+async function smartCommitUpload(){
+  if(!liveIsSuperUser()){alert('Hanya Super User / Project Owner yang dapat meng-upload span.');return;}
+  if(!smartRows.length){alert('Belum ada data valid untuk di-import.');return;}
+  const btn=document.getElementById('v21GenerateBtn');if(btn){btn.disabled=true;btn.textContent='Menyimpan…';}
+  try{
+    const records=[];
+    for(const r of smartRows){
+      const {data:nextId,error:idErr}=await liveSupabase.rpc('next_recovery_span_id');
+      if(idErr)throw idErr;
+      const num=v=>{const n=parseFloat(String(v??'').replace(',','.').replace(/[^0-9.\-]/g,''));return Number.isFinite(n)?n:0;};
+      const statusMap={'critical':'Critical','watch':'Watch','on track':'On Track','on-track':'On Track','new / unclassified':'New / Unclassified'};
+      const st=statusMap[String(r.status||'').trim().toLowerCase()]||'On Track';
+      const target=(r.target&&/^\d{4}-\d{2}-\d{2}$/.test(r.target))?r.target:null;
+      records.push({
+        id:nextId,parent_id:r.parentId||null,span_role:r.parentId?'child':'standalone',
+        site_a:[r.siteIdA,r.siteNameA].filter(Boolean).join(' — '),
+        site_b:[r.siteIdB,r.siteNameB].filter(Boolean).join(' — '),
+        site_id_a:r.siteIdA,site_name_a:r.siteNameA,site_id_b:r.siteIdB,site_name_b:r.siteNameB,
+        region:r.region||'Unclassified',length_km:Math.max(0,num(r.length)),
+        recovered_km:Math.max(0,num(r.recovered)),progress_pct:Math.min(100,Math.max(0,num(r.progress))),
+        recovery_type:r.recoveryType||null,target_date:target,status:st,quality:'Green',
+        issue_root_cause:r.issue||null,mitra_subcont:r.mitra||null,created_by:session.userId,updated_by:session.userId
+      });
+    }
+    const {error}=await liveSupabase.from('recovery_spans').insert(records);
+    if(error)throw error;
+    await auditLog('Import '+records.length+' Recovery Span dari '+smartFileName);
+    const n=records.length;
+    smartRows=[];await loadStoredData();populateGlobalMitraFilter();initAdmin();update();
+    const sum=document.getElementById('v21ImportSummary');if(sum)sum.innerHTML='<b>'+n+' span berhasil tersimpan di Supabase.</b>';
+    const preview=document.getElementById('v21ImportPreview');if(preview)preview.innerHTML='<div class="empty-state"><b>Import selesai</b><span>'+n+' span telah tersimpan di database live.</span></div>';
+    if(btn){btn.disabled=true;btn.textContent='Masukkan ke Dashboard →';}
+    const input=document.getElementById('v21ImportFile');if(input)input.value='';
+  }catch(err){
+    alert('Import ke Supabase gagal: '+(err.message||err));
+    if(btn){btn.disabled=false;btn.textContent='Masukkan ke Dashboard →';}
+  }
+}
+window.smartOpenUpload=smartOpenUpload;window.smartCloseUpload=smartCloseUpload;window.smartClearUpload=smartClearUpload;
+window.smartReadUpload=smartReadUpload;window.smartCommitUpload=smartCommitUpload;
+
+function v19Load(key){
+  if(key===V19_DOC_KEY)return liveDocumentCache;
+  if(key===V19_EVIDENCE_KEY)return liveEvidenceCache;
+  return [];
+}
+function v19Save(){alert('Data live hanya dapat diubah melalui fungsi Supabase.');}
+async function saveSpanDocumentLink(){
+  if(!liveCanUpdate())return alert('Akses ditolak.');
+  const spanId=adminEditingId||document.getElementById('adminSpan')?.value;
+  const x=data.find(v=>v.id===spanId);if(!x||!liveCanEditSpan(x))return alert('Anda tidak memiliki akses edit span ini.');
+  const type=document.getElementById('docLinkType')?.value||'Other';
+  const url=document.getElementById('docLinkUrl')?.value.trim();
+  const note=document.getElementById('docLinkNote')?.value.trim()||'';
+  if(!url)return alert('Document URL wajib diisi.');
+  try{new URL(url)}catch(_){return alert('URL tidak valid. Gunakan https://...');}
+  const {data:row,error}=await liveSupabase.from('span_evidence').insert(liveUiToDb({spanId,type,url,note},'document')).select('*').single();
+  if(error)return alert('Gagal menyimpan document link: '+error.message);
+  liveDocumentCache.push(liveEvidenceToUI(row));
+  document.getElementById('docLinkUrl').value='';document.getElementById('docLinkNote').value='';
+  await auditLog('Add document link '+spanId);renderAdminDocs(spanId);renderTableDocs();
+}
+async function deleteSpanDocumentLink(id,spanId){
+  const x=data.find(v=>v.id===spanId);if(!liveCanEditSpan(x))return alert('Akses ditolak.');
+  if(!confirm('Hapus document link ini?'))return;
+  const {error}=await liveSupabase.from('span_evidence').delete().eq('id',id).eq('kind','document');
+  if(error)return alert(error.message);
+  liveDocumentCache=liveDocumentCache.filter(x=>String(x.id)!==String(id));
+  await auditLog('Delete document link '+spanId);renderAdminDocs(spanId);renderTableDocs();
+}
+async function saveEvidenceLink(){
+  if(!liveCanUpdate())return alert('Akses ditolak.');
+  const modal=document.getElementById('evidenceLinkModal'),spanId=modal?.dataset.spanId;
+  const x=data.find(v=>v.id===spanId);if(!x||!liveCanEditSpan(x))return alert('Anda tidak memiliki akses edit span ini.');
+  const url=document.getElementById('evUrl').value.trim();
+  if(!url)return alert('Evidence URL wajib diisi.');
+  try{new URL(url)}catch(_){return alert('URL tidak valid. Gunakan https://...');}
+  const payload=liveUiToDb({spanId,kind:'evidence',milestone:document.getElementById('evMilestone').value,
+    type:document.getElementById('evType').value,url,note:document.getElementById('evNote').value.trim()},'evidence');
+  const {data:row,error}=await liveSupabase.from('span_evidence').insert(payload).select('*').single();
+  if(error)return alert('Gagal menyimpan evidence: '+error.message);
+  liveEvidenceCache.push(liveEvidenceToUI(row));
+  document.getElementById('evUrl').value='';document.getElementById('evNote').value='';
+  await auditLog('Add evidence link '+spanId+' / '+payload.milestone_key);v19RenderEvidence(spanId);renderTableDocs();
+}
+async function deleteEvidenceLink(id,spanId){
+  const x=data.find(v=>v.id===spanId);if(!liveCanEditSpan(x))return alert('Akses ditolak.');
+  if(!confirm('Hapus evidence link ini?'))return;
+  const {error}=await liveSupabase.from('span_evidence').delete().eq('id',id).eq('kind','evidence');
+  if(error)return alert(error.message);
+  liveEvidenceCache=liveEvidenceCache.filter(x=>String(x.id)!==String(id));
+  await auditLog('Delete evidence link '+spanId);v19RenderEvidence(spanId);renderTableDocs();
+}
+window.saveSpanDocumentLink=saveSpanDocumentLink;window.deleteSpanDocumentLink=deleteSpanDocumentLink;
+window.saveEvidenceLink=saveEvidenceLink;window.deleteEvidenceLink=deleteEvidenceLink;
+
+function liveInitDropzone(){
+  const dz=document.getElementById('v30Dropzone'),input=document.getElementById('v21ImportFile');
+  if(!dz||!input)return;
+  ['dragenter','dragover'].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.add('dragover');}));
+  ['dragleave','drop'].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.remove('dragover');}));
+  dz.addEventListener('drop',e=>{const f=e.dataTransfer.files?.[0];if(!f)return;const dt=new DataTransfer();dt.items.add(f);input.files=dt.files;smartReadUpload(input);});
+}
+async function liveBootstrap(){
+  // Purge old demo sessions so no one can accidentally enter without Supabase Auth.
+  ['fiberRecoveryDemoSession','fiberRecoveryCurrentUser','fiberRecoveryRole','fiberRecoveryDemoData','fiberRecoverySpansV21'].forEach(k=>localStorage.removeItem(k));
+  session=null;liveProfile=null;
+  const loginScreen=document.getElementById('loginScreen');if(loginScreen)loginScreen.style.display='flex';
+  const note=document.querySelector('.demo-note');if(note)note.innerHTML='<b>Live Access</b><br>Gunakan akun Supabase yang sudah didaftarkan. Privilege berasal dari profile database.';
+  const footer=document.querySelector('.footer');if(footer)footer.textContent='LIVE MODE • Data, milestone, evidence link, dan audit trail tersimpan di Supabase.';
+  const email=document.getElementById('loginUser');if(email)email.type='email';
+  const pass=document.getElementById('loginPass');if(pass){pass.type='password';pass.required=true;}
+  liveInitDropzone();
+  const {data:{session:authSession},error}=await liveSupabase.auth.getSession();
+  if(error){liveSetStatus('Supabase Auth error');return;}
+  if(authSession?.user){
+    try{session=await liveFetchProfile(authSession.user);await liveAfterLogin();}
+    catch(ex){await liveSupabase.auth.signOut();liveSetStatus('Profile error');document.getElementById('loginError').textContent=ex.message||'Profile tidak dapat dibaca.';}
+  }else{
+    data=[];liveSetStatus('Menunggu login Supabase');
+    populateGlobalMitraFilter();initAdmin();update();
+  }
+  liveSupabase.auth.onAuthStateChange(async(event,auth)=>{
+    if(event==='SIGNED_OUT'){session=null;liveProfile=null;data=[];const sc=document.getElementById('loginScreen');if(sc)sc.style.display='flex';update();}
+  });
+}
+document.addEventListener('DOMContentLoaded',liveBootstrap);
 </script>
 </body>
 </html>
